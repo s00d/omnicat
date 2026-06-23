@@ -143,7 +143,7 @@ cargo build --release
 
 The installed command is **`omnicat`**. It does not replace `/bin/cat` unless you ask it to.
 
-To route interactive `cat` through omnicat — the same opt-in pattern as the original [smartcat](https://github.com/a0s/smartcat) — add **one line** to your shell config. After that, `cat` and `omnicat` are interchangeable in everyday use; the examples above work with either name.
+To route interactive `cat` through omnicat, add **one line** to your shell config. After that, `cat` and `omnicat` are interchangeable in everyday use; the examples above work with either name.
 
 ### Setup
 
@@ -269,7 +269,7 @@ You can plug in external tools (glow, bat, jupytext, imgcat, …) via the `handl
 
 Optional YAML — pick the first file that exists:
 
-1. `$OMNICAT_CONFIG` (alias: `$SMARTCAT_CONFIG`)
+1. `$OMNICAT_CONFIG`
 2. `~/.config/omnicat/config.yaml`
 3. Bundled defaults shipped with the binary
 
@@ -284,10 +284,6 @@ omnicat -status    # show active settings and which handlers are available
 - **macOS** — fully supported (terminal + GUI)
 - **Linux** — fully supported (terminal + GUI when a display is present)
 - **Windows** — terminal preview; GUI depends on display support
-
-## Previous versions
-
-This repository continues [smartcat](https://github.com/a0s/smartcat) as a Rust rewrite (`omnicat`). The original bash implementation (external CLI chains only) is in [`legacy/`](legacy/).
 
 ## Development
 
