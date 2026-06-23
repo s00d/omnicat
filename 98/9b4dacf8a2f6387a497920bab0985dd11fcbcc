@@ -1,0 +1,25 @@
+README.md
+  s_38c825f2139b43::t_9e759c320b3d5d 272
+  s_38c825f2139b43::t_c92f0d872aa33e 146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "989b4dacf8a2f6387a497920bab0985dd11fcbcc",
+  "prompts": {},
+  "humans": {
+    "h_ee6cac30a1b83a": {
+      "author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_38c825f2139b43": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2737c0c1-19d5-4027-8831-709a2481a7b3",
+        "model": "default"
+      },
+      "human_author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  }
+}
