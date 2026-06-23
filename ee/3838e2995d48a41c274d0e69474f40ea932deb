@@ -1,0 +1,41 @@
+Formula/omnicat.rb
+  s_38c825f2139b43::t_9200c65c08c2f1 7
+src/drivers/ebook.rs
+  s_38c825f2139b43::t_6700fe41e6f938 304,334
+src/drivers/media.rs
+  s_38c825f2139b43::t_d72b0e7f0d34e4 121
+  s_38c825f2139b43::t_ad2153857ca349 122-123,134,136,138-144,146-147,150-157,161-162
+  s_38c825f2139b43::t_35ec34d4510a3f 133
+  s_38c825f2139b43::t_6b189c5ebc7bc0 145
+  s_38c825f2139b43::t_a012f83887cdfe 120
+  s_38c825f2139b43::t_5e3de8a7cf0d74 158-160
+src/drivers/office/document.rs
+  s_38c825f2139b43::t_b9e370717ed3fa 76,105
+src/drivers/office/presentation.rs
+  s_38c825f2139b43::t_feb1383d90546c 84
+README.md
+  s_38c825f2139b43::t_14321caa44772e 1
+Cargo.toml
+  s_38c825f2139b43::t_f9c960d94e9cf2 3
+  s_38c825f2139b43::t_eb4bcbe9bed7b1 22-24,39,41,43,45,53,58,63-65,70,75,85
+  s_38c825f2139b43::t_876c4559be0718 46
+src/drivers/markdown.rs
+  s_38c825f2139b43::t_aed137a2c27147 158-159
+  s_38c825f2139b43::t_64c5ff675c65ec 215
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "ee3838e2995d48a41c274d0e69474f40ea932deb",
+  "prompts": {},
+  "sessions": {
+    "s_38c825f2139b43": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2737c0c1-19d5-4027-8831-709a2481a7b3",
+        "model": "default"
+      },
+      "human_author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  }
+}
