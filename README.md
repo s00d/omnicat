@@ -1,14 +1,33 @@
+[![Version](https://img.shields.io/badge/version-0.5.0-blue?style=for-the-badge)](https://github.com/s00d/omnicat)
+[![CI](https://img.shields.io/github/actions/workflow/status/s00d/omnicat/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/s00d/omnicat/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.92%2B-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
+[![Homebrew](https://img.shields.io/badge/Homebrew-s00d%2Fomnicat-FBB040?style=for-the-badge&logo=homebrew)](https://github.com/s00d/omnicat#install)
+[![Donate](https://img.shields.io/badge/Donate-Donationalerts-ff4081?style=for-the-badge)](https://www.donationalerts.com/r/s00d88)
+
+<p align="center">
+<img src="https://github.com/s00d/omnicat/blob/main/images/omnicat-logo.png?raw=true" alt="omnicat logo" width="180">
+</p>
+
 # omnicat
 
 **Preview almost any file in your terminal — or in a GUI window.**
-
-![Terminal demo](demo/omnicat-demo.gif)
 
 omnicat is a smarter replacement for `cat` when you are working interactively. Point it at a file or folder and get a readable preview: Markdown with formatting, syntax-highlighted code, spreadsheet tables, PDF text, ebook chapters, archive trees, images, and more.
 
 When you pipe output to another command or redirect to a file, omnicat behaves exactly like plain `cat` — raw bytes, no surprises.
 
 **Make `cat` smart — transparently.** Keep typing `cat` as you always have. With the optional shell shim (below), a single file in an interactive terminal renders as a preview; pipes, redirects, multiple files, and flags stay plain `cat`, byte for byte. You can also call `omnicat` directly — both names do the same thing once the shim is enabled.
+
+## Demo
+
+Terminal previews (Markdown, syntax-highlighted code, images, spreadsheets, archives, ebooks with paging) and `--preview` GUI window — one command, no extra tools required.
+
+<p align="center">
+<img src="https://github.com/s00d/omnicat/blob/main/demo/omnicat-demo.gif?raw=true" alt="omnicat terminal demo: Markdown, Python, PNG, XLSX, directory tree, hex dump, EPUB, MOBI, CBZ, and GUI preview" width="900">
+</p>
+
+<em>Recorded with <a href="https://github.com/charmbracelet/vhs">VHS</a> — re-record: <code>vhs demo/omnicat-demo.tape</code> (see <a href="demo/README.md">demo/README.md</a>).</em>
 
 ## Who is this for?
 

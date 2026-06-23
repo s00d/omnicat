@@ -1,3 +1,4 @@
 /target/
 images/*.png
+!images/omnicat-logo.png
 Cargo.lock
