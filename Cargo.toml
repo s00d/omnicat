@@ -1,6 +1,6 @@
 [package]
 name = "omnicat"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2021"
 rust-version = "1.92"
 description = "Universal file preview for terminal and GUI — a context-aware cat"
@@ -75,3 +75,11 @@ insta = { version = "1", features = ["filters"] }
 portable-pty = "0.8"
 predicates = "3"
 tempfile = "3"
+
+
+[profile.release]
+opt-level = "z" # Оптимизация для размера
+lto = true # Включение Link Time Optimization
+codegen-units = 1 # Уменьшение количества единиц компиляции для лучшей оптимизации
+panic = "abort" # Уменьшение объема кода для обработки паник
+strip = true # Удаление символов отладки
