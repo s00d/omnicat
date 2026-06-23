@@ -301,7 +301,7 @@ fn extract_fb2_text(xml: &str, max_paragraphs: usize) -> Result<String> {
     loop {
         match reader.read_event() {
             Ok(quick_xml::events::Event::Text(t)) => {
-                if let Ok(s) = t.unescape() {
+                if let Ok(s) = t.decode() {
                     let trimmed = s.trim();
                     if !trimmed.is_empty() {
                         out.push_str(trimmed);
@@ -331,7 +331,7 @@ fn extract_xml_text_nodes(xml: &str, out: &mut String, limit: usize) -> Result<(
     loop {
         match reader.read_event() {
             Ok(quick_xml::events::Event::Text(t)) => {
-                if let Ok(s) = t.unescape() {
+                if let Ok(s) = t.decode() {
                     let trimmed = s.trim();
                     if !trimmed.is_empty() {
                         out.push_str(trimmed);

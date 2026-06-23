@@ -73,7 +73,7 @@ fn extract_docx(path: &Path, max_paragraphs: usize) -> Result<String> {
                 }
             }
             Ok(Event::Text(t)) => {
-                if let Ok(s) = t.unescape() {
+                if let Ok(s) = t.decode() {
                     current.push_str(&s);
                     current.push(' ');
                 }
@@ -102,7 +102,7 @@ fn extract_odt_text(path: &Path, max_paragraphs: usize) -> Result<String> {
     loop {
         match reader.read_event() {
             Ok(Event::Text(t)) => {
-                if let Ok(s) = t.unescape() {
+                if let Ok(s) = t.decode() {
                     out.push_str(&s);
                     out.push('\n');
                     count += 1;

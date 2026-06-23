@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.5.0-blue?style=for-the-badge)](https://github.com/s00d/omnicat)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue?style=for-the-badge)](https://github.com/s00d/omnicat)
 [![CI](https://img.shields.io/github/actions/workflow/status/s00d/omnicat/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/s00d/omnicat/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.92%2B-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)

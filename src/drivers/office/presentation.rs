@@ -81,7 +81,7 @@ fn extract_text_from_xml(xml: &str) -> String {
     loop {
         match reader.read_event() {
             Ok(Event::Text(t)) => {
-                if let Ok(s) = t.unescape() {
+                if let Ok(s) = t.decode() {
                     let trimmed = s.trim();
                     if !trimmed.is_empty() {
                         out.push_str(trimmed);

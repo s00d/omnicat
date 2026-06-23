@@ -117,10 +117,12 @@ fn write_media_info(info: &MediaInfoContent, out: &mut dyn Write) -> Result<()> 
 }
 
 fn extract_audio_meta(path: &Path, ctx: &PreviewContext) -> Result<MediaInfoContent> {
-    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::codecs::audio::CODEC_ID_NULL_AUDIO;
+    use symphonia::core::units::Timestamp;
+    use symphonia::core::formats::probe::Hint;
+    use symphonia::core::formats::{FormatOptions, TrackType};
     use symphonia::core::io::MediaSourceStream;
     use symphonia::core::meta::MetadataOptions;
-    use symphonia::core::probe::Hint;
 
     let src = File::open(path).context("open audio")?;
     let mss = MediaSourceStream::new(Box::new(src), Default::default());
@@ -128,25 +130,36 @@ fn extract_audio_meta(path: &Path, ctx: &PreviewContext) -> Result<MediaInfoCont
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         hint.with_extension(ext);
     }
-    let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+    let format = symphonia::default::get_probe()
+        .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
         .context("probe audio")?;
-    let format = probed.format;
-    let track = format
-        .tracks()
-        .iter()
-        .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
-        .cloned();
+    let track = format.default_track(TrackType::Audio);
     let codec = track.as_ref().and_then(|t| {
-        symphonia::default::get_codecs()
-            .get_codec(t.codec_params.codec)
-            .map(|c| c.short_name.to_string())
+        t.codec_params.as_ref().and_then(|params| {
+            params.audio().and_then(|audio| {
+                if audio.codec == CODEC_ID_NULL_AUDIO {
+                    return None;
+                }
+                symphonia::default::get_codecs()
+                    .get_audio_decoder(audio.codec)
+                    .map(|dec| dec.codec.info.short_name.to_string())
+            })
+        })
     });
     let duration = track.as_ref().and_then(|t| {
-        t.codec_params
-            .n_frames
-            .zip(t.codec_params.sample_rate)
-            .map(|(frames, sr)| frames as f64 / sr as f64)
+        if let (Some(num_frames), Some(params)) = (t.num_frames, t.codec_params.as_ref()) {
+            if let Some(audio) = params.audio() {
+                if let Some(sr) = audio.sample_rate {
+                    return Some(num_frames as f64 / sr as f64);
+                }
+            }
+        }
+        match (t.duration, t.time_base) {
+            (Some(dur), Some(tb)) => tb
+                .calc_time(Timestamp::new(dur.get() as i64))
+                .map(|time| time.as_secs_f64()),
+            _ => None,
+        }
     });
 
     Ok(MediaInfoContent {

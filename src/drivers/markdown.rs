@@ -155,7 +155,8 @@ impl<'a> MarkdownRenderer<'a> {
                 self.image_alt = title.to_string();
             }
             Tag::HtmlBlock | Tag::FootnoteDefinition(_) | Tag::DefinitionList
-            | Tag::DefinitionListTitle | Tag::DefinitionListDefinition | Tag::MetadataBlock(_) => {}
+            | Tag::DefinitionListTitle | Tag::DefinitionListDefinition | Tag::MetadataBlock(_)
+            | Tag::Superscript | Tag::Subscript => {}
         }
         Ok(())
     }
@@ -211,7 +212,7 @@ impl<'a> MarkdownRenderer<'a> {
             }
             TagEnd::HtmlBlock | TagEnd::FootnoteDefinition | TagEnd::DefinitionList
             | TagEnd::DefinitionListTitle | TagEnd::DefinitionListDefinition
-            | TagEnd::MetadataBlock(_) => {}
+            | TagEnd::MetadataBlock(_) | TagEnd::Superscript | TagEnd::Subscript => {}
         }
         Ok(())
     }
