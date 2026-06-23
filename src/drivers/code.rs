@@ -35,6 +35,18 @@ impl CodeDriver {
         let show_numbers =
             config.terminal.code.line_numbers && config.terminal.code.style != "plain";
 
+        if config.terminal.plain {
+            for (idx, line) in LinesWithEndings::from(&source).enumerate() {
+                if show_numbers {
+                    let text = line.strip_suffix('\n').unwrap_or(line);
+                    write!(out, "{line_no:>4}| {text}", line_no = idx + 1)?;
+                } else {
+                    write!(out, "{line}")?;
+                }
+            }
+            return Ok(());
+        }
+
         for (idx, line) in LinesWithEndings::from(&source).enumerate() {
             let ranges: Vec<(Style, &str)> =
                 h.highlight_line(line, &ps).context("highlight failed")?;

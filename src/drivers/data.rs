@@ -186,7 +186,7 @@ fn table_from_records(
 }
 
 fn highlight_data(text: &str, ext: &str, config: &OmnicatConfig, out: &mut dyn Write) -> Result<()> {
-    if matches!(ext, "csv" | "tsv") {
+    if matches!(ext, "csv" | "tsv") || config.terminal.plain {
         writeln!(out, "{text}")?;
         return Ok(());
     }

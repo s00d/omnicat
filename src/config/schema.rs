@@ -52,6 +52,9 @@ pub struct TerminalSettings {
     pub paginate: PaginateDisplay,
     #[serde(default)]
     pub document: TerminalDocumentDisplay,
+    /// Runtime-only: plain terminal output without ANSI (set when paging).
+    #[serde(skip, default)]
+    pub plain: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -63,7 +66,7 @@ pub struct TerminalDocumentDisplay {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PaginateDisplay {
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub enabled: bool,
     /// Lines per page (0 = fit to terminal height).
     #[serde(default)]

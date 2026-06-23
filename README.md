@@ -2,7 +2,6 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/s00d/omnicat/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/s00d/omnicat/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.92%2B-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
-[![Homebrew](https://img.shields.io/badge/Homebrew-s00d%2Fomnicat-FBB040?style=for-the-badge&logo=homebrew)](https://github.com/s00d/omnicat#install)
 [![Donate](https://img.shields.io/badge/Donate-Donationalerts-ff4081?style=for-the-badge)](https://www.donationalerts.com/r/s00d88)
 
 <p align="center">
@@ -45,7 +44,7 @@ omnicat README.md             # rendered Markdown
 cat src/main.rs               # syntax-highlighted source
 omnicat report.xlsx           # spreadsheet preview
 cat archive.zip               # archive tree
-omnicat notes.epub            # ebook text (paged in the terminal)
+omnicat notes.epub --paginate  # ebook text with interactive pager
 cat project/                  # directory tree
 
 omnicat --preview diagram.png # GUI window (when a display is available)
@@ -55,42 +54,6 @@ cat -n file.md                # flags → plain cat
 ```
 
 ## Install
-
-### Homebrew (recommended)
-
-macOS and Linux:
-
-```bash
-brew install s00d/omnicat/omnicat
-```
-
-If the tap is not on your machine yet:
-
-```bash
-brew tap s00d/omnicat
-brew install omnicat
-```
-
-Install the latest development build from Git:
-
-```bash
-brew install s00d/omnicat/omnicat --HEAD
-```
-
-Install from a local checkout (before the formula is in the tap):
-
-```bash
-brew install rust
-git clone https://github.com/s00d/omnicat.git
-cd omnicat
-brew install --HEAD Formula/omnicat.rb
-```
-
-Upgrade later:
-
-```bash
-brew upgrade omnicat
-```
 
 ### Cargo (global install)
 
@@ -217,13 +180,13 @@ Remove the `eval "$(omnicat init …)"` line from your shell config and reload. 
 | GUI preview | `omnicat --preview <path>` |
 | GUI only (no terminal output) | `omnicat --preview-only <path>` |
 | Force plain `cat` | `cat -native <file> …` or `omnicat -native …` |
-| Dump everything (no pager) | `omnicat --no-paginate <file>` |
+| Page long output | `omnicat --paginate <file>` |
 | Check what works on your system | `cat -status` or `omnicat -status` |
 | Help | `omnicat --help` |
 
 ## Terminal paging
 
-Long output (big ebooks, large logs, wide tables) opens an interactive pager in the terminal.
+Long output can be browsed with an interactive pager. Paging is **off by default**; use `--paginate` (or `terminal.paginate.enabled: true` in config).
 
 | Key | Action |
 |-----|--------|
@@ -232,9 +195,9 @@ Long output (big ebooks, large logs, wide tables) opens an interactive pager in 
 | `g` / `G` | First / last page |
 | `q`, `Esc` | Quit |
 
-Disable paging: `--no-paginate`, or set `terminal.paginate.enabled: false` in config.
+Enable paging: `--paginate`, or set `terminal.paginate.enabled: true` in config.
 
-Environment: `OMNICAT_NO_PAGINATE=1`.
+Environment: `OMNICAT_PAGINATE=1`.
 
 ## GUI preview
 

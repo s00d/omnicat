@@ -19,12 +19,18 @@ pub fn heading_color(config: &OmnicatConfig) -> Color {
 }
 
 pub fn style_header_cell(text: impl ToString, config: &OmnicatConfig) -> Cell {
+    if config.terminal.plain {
+        return Cell::new(text);
+    }
     Cell::new(text)
         .fg(heading_color(config))
         .add_attribute(Attribute::Bold)
 }
 
 pub fn style_body_cell(text: impl ToString, col_index: usize, config: &OmnicatConfig) -> Cell {
+    if config.terminal.plain {
+        return Cell::new(text);
+    }
     if col_index == 0 {
         Cell::new(text).fg(heading_color(config))
     } else {

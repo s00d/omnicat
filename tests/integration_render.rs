@@ -21,7 +21,6 @@ fn run_pty(args: &[&str]) -> String {
         .unwrap();
 
     let mut cmd = CommandBuilder::new(cargo_bin());
-    cmd.env("OMNICAT_NO_PAGINATE", "1");
     for arg in args {
         cmd.arg(arg);
     }

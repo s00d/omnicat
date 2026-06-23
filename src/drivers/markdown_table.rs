@@ -61,11 +61,19 @@ pub fn render_table(
     writeln!(out, "{}", table)?;
 
     if total_rows > show_rows {
-        writeln!(
-            out,
-            "\x1b[90m… {} more row(s) (terminal.data.max_rows = {max_rows})\x1b[0m",
-            total_rows - show_rows
-        )?;
+        if config.terminal.plain {
+            writeln!(
+                out,
+                "… {} more row(s) (terminal.data.max_rows = {max_rows})",
+                total_rows - show_rows
+            )?;
+        } else {
+            writeln!(
+                out,
+                "\x1b[90m… {} more row(s) (terminal.data.max_rows = {max_rows})\x1b[0m",
+                total_rows - show_rows
+            )?;
+        }
     }
 
     writeln!(out)?;

@@ -35,6 +35,7 @@ struct MarkdownRenderer<'a> {
     config: &'a OmnicatConfig,
     theme: String,
     code_theme: String,
+    plain: bool,
 
     in_code_block: bool,
     code_block_lang: String,
@@ -61,6 +62,7 @@ impl<'a> MarkdownRenderer<'a> {
             config,
             theme: config.terminal.markdown.theme.clone(),
             code_theme: config.terminal.code.theme.clone(),
+            plain: config.terminal.plain,
             in_code_block: false,
             code_block_lang: String::new(),
             code_block_buf: String::new(),
@@ -109,11 +111,11 @@ impl<'a> MarkdownRenderer<'a> {
         match tag {
             Tag::Paragraph => {}
             Tag::Heading { level, .. } => {
-                write!(self.out, "{}", heading_color(level, &self.theme))?;
+                write!(self.out, "{}", heading_color(level, &self.theme, self.plain))?;
             }
             Tag::BlockQuote(_) => {
                 self.blockquote_depth += 1;
-                write!(self.out, "{}", blockquote_color(&self.theme))?;
+                write!(self.out, "{}", blockquote_color(&self.theme, self.plain))?;
                 self.write_blockquote_prefix()?;
             }
             Tag::CodeBlock(kind) => {
@@ -144,10 +146,10 @@ impl<'a> MarkdownRenderer<'a> {
             Tag::TableCell => {
                 self.table_cell.clear();
             }
-            Tag::Emphasis => write!(self.out, "{}", emphasis(&self.theme))?,
-            Tag::Strong => write!(self.out, "{}", strong(&self.theme))?,
-            Tag::Strikethrough => write!(self.out, "{}", strikethrough(&self.theme))?,
-            Tag::Link { .. } => write!(self.out, "{}", link(&self.theme))?,
+            Tag::Emphasis => write!(self.out, "{}", emphasis(&self.theme, self.plain))?,
+            Tag::Strong => write!(self.out, "{}", strong(&self.theme, self.plain))?,
+            Tag::Strikethrough => write!(self.out, "{}", strikethrough(&self.theme, self.plain))?,
+            Tag::Link { .. } => write!(self.out, "{}", link(&self.theme, self.plain))?,
             Tag::Image { title, .. } => {
                 self.in_image = true;
                 self.image_alt = title.to_string();
@@ -162,11 +164,11 @@ impl<'a> MarkdownRenderer<'a> {
         match tag {
             TagEnd::Paragraph => self.end_paragraph()?,
             TagEnd::Heading(_) => {
-                writeln!(self.out, "{}", reset())?;
+                writeln!(self.out, "{}", reset(self.plain))?;
                 writeln!(self.out)?;
             }
             TagEnd::BlockQuote(_) => {
-                writeln!(self.out, "{}", reset())?;
+                writeln!(self.out, "{}", reset(self.plain))?;
                 self.blockquote_depth = self.blockquote_depth.saturating_sub(1);
                 writeln!(self.out)?;
             }
@@ -194,9 +196,9 @@ impl<'a> MarkdownRenderer<'a> {
                 self.table_row.push(self.table_cell.trim().to_string());
             }
             TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => {
-                write!(self.out, "{}", reset())?;
+                write!(self.out, "{}", reset(self.plain))?;
             }
-            TagEnd::Link => write!(self.out, "{}", reset())?,
+            TagEnd::Link => write!(self.out, "{}", reset(self.plain))?,
             TagEnd::Image => {
                 let label = if self.image_alt.is_empty() {
                     "image"
@@ -242,9 +244,9 @@ impl<'a> MarkdownRenderer<'a> {
             self.table_cell.push_str(code);
             return Ok(());
         }
-        write!(self.out, "{}", code_color(&self.theme))?;
+        write!(self.out, "{}", code_color(&self.theme, self.plain))?;
         write!(self.out, "`{code}`")?;
-        write!(self.out, "{}", reset())?;
+        write!(self.out, "{}", reset(self.plain))?;
         Ok(())
     }
 
@@ -312,7 +314,7 @@ impl<'a> MarkdownRenderer<'a> {
         self.in_code_block = false;
         let code = std::mem::take(&mut self.code_block_buf);
         let lang = std::mem::take(&mut self.code_block_lang);
-        render_fenced_code(self.out, &lang, &code, &self.code_theme)?;
+        render_fenced_code(self.out, &lang, &code, &self.code_theme, self.plain)?;
         writeln!(self.out)?;
         Ok(())
     }
@@ -332,7 +334,7 @@ impl<'a> MarkdownRenderer<'a> {
     }
 
     fn rule(&mut self) -> Result<()> {
-        writeln!(self.out, "{}", rule(&self.theme))?;
+        writeln!(self.out, "{}", rule(&self.theme, self.plain))?;
         writeln!(self.out)?;
         Ok(())
     }
@@ -358,9 +360,25 @@ fn render_fenced_code(
     lang: &str,
     code: &str,
     theme_name: &str,
+    plain: bool,
 ) -> Result<()> {
     writeln!(out)?;
     if code.trim().is_empty() {
+        return Ok(());
+    }
+
+    if plain {
+        for line in LinesWithEndings::from(code) {
+            write!(
+                out,
+                "  {}",
+                line.strip_suffix('\n').unwrap_or(line)
+            )?;
+            if line.ends_with('\n') {
+                writeln!(out)?;
+            }
+        }
+        writeln!(out)?;
         return Ok(());
     }
 
@@ -385,14 +403,8 @@ fn render_fenced_code(
     Ok(())
 }
 
-fn heading_color(level: pulldown_cmark::HeadingLevel, theme: &str) -> String {
+fn heading_color(level: pulldown_cmark::HeadingLevel, theme: &str, plain: bool) -> String {
     let _ = theme;
-    let color = match level {
-        pulldown_cmark::HeadingLevel::H1 => "\x1b[1;36m",
-        pulldown_cmark::HeadingLevel::H2 => "\x1b[1;34m",
-        pulldown_cmark::HeadingLevel::H3 => "\x1b[1;32m",
-        _ => "\x1b[1m",
-    };
     let marks = match level {
         pulldown_cmark::HeadingLevel::H1 => "# ",
         pulldown_cmark::HeadingLevel::H2 => "## ",
@@ -401,46 +413,87 @@ fn heading_color(level: pulldown_cmark::HeadingLevel, theme: &str) -> String {
         pulldown_cmark::HeadingLevel::H5 => "##### ",
         pulldown_cmark::HeadingLevel::H6 => "###### ",
     };
+    if plain {
+        return marks.to_string();
+    }
+    let color = match level {
+        pulldown_cmark::HeadingLevel::H1 => "\x1b[1;36m",
+        pulldown_cmark::HeadingLevel::H2 => "\x1b[1;34m",
+        pulldown_cmark::HeadingLevel::H3 => "\x1b[1;32m",
+        _ => "\x1b[1m",
+    };
     format!("{color}{marks}")
 }
 
-fn blockquote_color(theme: &str) -> &'static str {
+fn blockquote_color(theme: &str, plain: bool) -> &'static str {
     let _ = theme;
-    "\x1b[90m"
+    if plain {
+        ""
+    } else {
+        "\x1b[90m"
+    }
 }
 
-fn code_color(theme: &str) -> &'static str {
+fn code_color(theme: &str, plain: bool) -> &'static str {
     let _ = theme;
-    "\x1b[38;5;245m"
+    if plain {
+        ""
+    } else {
+        "\x1b[38;5;245m"
+    }
 }
 
-fn emphasis(theme: &str) -> &'static str {
+fn emphasis(theme: &str, plain: bool) -> &'static str {
     let _ = theme;
-    "\x1b[3m"
+    if plain {
+        ""
+    } else {
+        "\x1b[3m"
+    }
 }
 
-fn strong(theme: &str) -> &'static str {
+fn strong(theme: &str, plain: bool) -> &'static str {
     let _ = theme;
-    "\x1b[1m"
+    if plain {
+        ""
+    } else {
+        "\x1b[1m"
+    }
 }
 
-fn strikethrough(theme: &str) -> &'static str {
+fn strikethrough(theme: &str, plain: bool) -> &'static str {
     let _ = theme;
-    "\x1b[9m"
+    if plain {
+        ""
+    } else {
+        "\x1b[9m"
+    }
 }
 
-fn link(theme: &str) -> &'static str {
+fn link(theme: &str, plain: bool) -> &'static str {
     let _ = theme;
-    "\x1b[4;34m"
+    if plain {
+        ""
+    } else {
+        "\x1b[4;34m"
+    }
 }
 
-fn rule(theme: &str) -> &'static str {
+fn rule(theme: &str, plain: bool) -> &'static str {
     let _ = theme;
-    "\x1b[90m────────────────────────────────────────\x1b[0m"
+    if plain {
+        "────────────────────────────────────────"
+    } else {
+        "\x1b[90m────────────────────────────────────────\x1b[0m"
+    }
 }
 
-fn reset() -> &'static str {
-    "\x1b[0m"
+fn reset(plain: bool) -> &'static str {
+    if plain {
+        ""
+    } else {
+        "\x1b[0m"
+    }
 }
 
 impl PreviewDriver for MarkdownDriver {

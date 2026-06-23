@@ -111,13 +111,14 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
             return Ok(());
         }
 
-        let use_pagination = sinks::paginate::pagination_requested(&config, options.no_paginate)
+        let use_pagination = sinks::paginate::pagination_requested(&config, options.paginate)
             && !sinks::paginate::skips_pagination(&resolved);
 
         let render_config = if use_pagination {
             let mut c = config.clone();
             // Full text for the pager; screen size limits display, not extraction.
             c.terminal.document.max_chars = 0;
+            c.terminal.plain = true;
             c
         } else {
             config.clone()

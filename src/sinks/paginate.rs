@@ -26,11 +26,11 @@ enum Nav {
     Quit,
 }
 
-pub fn pagination_requested(config: &crate::config::OmnicatConfig, cli_no_paginate: bool) -> bool {
-    if cli_no_paginate || !config.terminal.paginate.enabled {
-        return false;
-    }
-    if std::env::var_os("OMNICAT_NO_PAGINATE").is_some() {
+pub fn pagination_requested(config: &crate::config::OmnicatConfig, cli_paginate: bool) -> bool {
+    let env_on = std::env::var_os("OMNICAT_PAGINATE").is_some_and(|v| {
+        v != "0" && v != "false" && v != "no"
+    });
+    if !cli_paginate && !config.terminal.paginate.enabled && !env_on {
         return false;
     }
     is_terminal::IsTerminal::is_terminal(&io::stdout())

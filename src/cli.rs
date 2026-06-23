@@ -2,7 +2,7 @@
 pub struct FileOptions {
     pub preview: bool,
     pub preview_only: bool,
-    pub no_paginate: bool,
+    pub paginate: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -27,10 +27,10 @@ Usage:
   omnicat <file>              Render a file when stdout is a TTY
   omnicat --preview <file>    Open a native preview window (if GUI available)
   omnicat --preview-only <file>  Preview window only, no terminal output
-  omnicat --no-paginate <file>   Dump full terminal output (no paging)
+  omnicat --paginate <file>      Interactive pager for long terminal output
   omnicat -native ...           Force the vanilla cat
 
-Paging (TTY, long output):
+Pager keys (--paginate, long output on a TTY):
   Space, Enter, j, ↓, PgDn  next page
   b, k, ↑, PgUp             previous page
   g / G                     first / last page
@@ -98,7 +98,7 @@ Configuration:
                     options.preview = true;
                     options.preview_only = true;
                 }
-                "--no-paginate" => options.no_paginate = true,
+                "--paginate" => options.paginate = true,
                 a if a.starts_with('-') => {
                     return Self {
                         command: Command::Native {
@@ -150,10 +150,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_no_paginate_flag() {
-        let cli = parse_args(&["omnicat", "--no-paginate", "file.py"]);
+    fn parse_paginate_flag() {
+        let cli = parse_args(&["omnicat", "--paginate", "file.py"]);
         match cli.command {
-            Command::File { options, .. } => assert!(options.no_paginate),
+            Command::File { options, .. } => assert!(options.paginate),
             _ => panic!("expected file command"),
         }
     }
