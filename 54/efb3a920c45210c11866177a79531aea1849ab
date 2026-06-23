@@ -1,0 +1,67 @@
+README.md
+  s_38c825f2139b43::t_0ed4bf35287490 47
+  s_38c825f2139b43::t_561728fb9c8ff3 183
+  s_38c825f2139b43::t_705535e244bb55 189
+  s_38c825f2139b43::t_532e8ada525c88 198,200
+src/drivers/code.rs
+  s_38c825f2139b43::t_4fa248a446b108 38-40,43-49
+  s_38c825f2139b43::t_2011abeaa13047 41-42
+assets/config.default.yaml
+  s_38c825f2139b43::t_46d4acfd4fd34f 38
+Cargo.toml
+  h_ee6cac30a1b83a 3
+src/drivers/markdown.rs
+  s_38c825f2139b43::t_c0ecd5748d01af 337
+  s_38c825f2139b43::t_7f664b35eef114 149-152
+  s_38c825f2139b43::t_10081fb41b5029 38
+  s_38c825f2139b43::t_ecdd77cc376c81 114
+  s_38c825f2139b43::t_24a46640cbf0f3 65
+  s_38c825f2139b43::t_f44e4047bc77ac 199
+  s_38c825f2139b43::t_40a1dd4c096b0e 118
+  s_38c825f2139b43::t_11e85b0a878ec0 201
+  s_38c825f2139b43::t_9503dcf57cda6e 247,249
+  s_38c825f2139b43::t_fe5cd0901e4100 167,171
+  s_38c825f2139b43::t_4b7a24b9c96d0e 317
+  s_38c825f2139b43::t_764f4369614e86 363,370-381
+  s_38c825f2139b43::t_f1d7ac8c7e684e 383,406,416-424,428,430-434,437,439-443,446,448-452,455,457-461,464,466-470,473,475-479,482,484-488,491-496
+src/drivers/markdown_table.rs
+  s_38c825f2139b43::t_856908713cd32c 64-76
+src/drivers/data.rs
+  s_38c825f2139b43::t_66348d90a81fed 189
+src/lib.rs
+  s_38c825f2139b43::t_14aa5a8267e8df 114
+  s_38c825f2139b43::t_85d5dc2c8547cc 121
+src/config/schema.rs
+  s_38c825f2139b43::t_9f6bd2ad5098b9 55-57
+  s_38c825f2139b43::t_7f6b88a56680e5 69
+src/sinks/styled_table.rs
+  s_38c825f2139b43::t_201ccc6b074d6b 22-24,31-33
+src/cli.rs
+  s_38c825f2139b43::t_2548b814e69dc1 5
+  s_38c825f2139b43::t_86bb65ea5fd2b2 101
+  s_38c825f2139b43::t_34904dfa92d034 153-154,156
+  s_38c825f2139b43::t_5ae79c39a4e406 30,33
+src/sinks/paginate.rs
+  s_38c825f2139b43::t_d335acf895dd90 29-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.10",
+  "base_commit_sha": "54efb3a920c45210c11866177a79531aea1849ab",
+  "prompts": {},
+  "humans": {
+    "h_ee6cac30a1b83a": {
+      "author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_38c825f2139b43": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2737c0c1-19d5-4027-8831-709a2481a7b3",
+        "model": "default"
+      },
+      "human_author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  }
+}
