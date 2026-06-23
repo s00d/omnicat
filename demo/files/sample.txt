@@ -1,0 +1,3 @@
+Plain UTF-8 text file for omnicat fallback / Text preview.
+
+Line two with symbols: (c) 2026 demo.

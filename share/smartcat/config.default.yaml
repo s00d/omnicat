@@ -1,0 +1,18 @@
+display:
+  markdown:
+    theme: default
+    wrap_width: 80
+  code:
+    line_numbers: true
+    theme: InspiredGitHub
+    style: numbers
+  data:
+    pretty: true
+    table_border: true
+  image:
+    max_width: 0
+    protocol: auto
+  pdf:
+    page_separator: true
+  archive:
+    long_format: true

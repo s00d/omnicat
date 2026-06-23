@@ -1,0 +1,79 @@
+terminal:
+  markdown:
+    theme: default
+    wrap_width: 80
+    heading_color: cyan
+    link_color: blue
+  code:
+    line_numbers: true
+    theme: base16-ocean.dark
+    style: numbers
+    tab_width: 4
+  data:
+    pretty: true
+    table_border: true
+    max_rows: 1000
+  image:
+    max_width: 0
+    protocol: auto
+  media:
+    playback: true
+  pdf:
+    page_separator: true
+    max_pages: 0
+  archive:
+    long_format: true
+    max_entries: 500
+    tree_style: unicode
+  directory:
+    max_depth: 3
+    max_entries: 500
+    show_hidden: false
+    icons: true
+  fallback:
+    max_bytes: 65536
+    hex_cols: 16
+    show_metadata: true
+
+gui:
+  window:
+    width: 960
+    height: 720
+    resizable: true
+    title_template: "omnicat — {file}"
+    always_on_top: false
+  theme:
+    mode: auto
+    accent: "#6c9eff"
+    font_family: default
+    font_size: 14
+    line_height: 1.4
+  preview:
+    open_maximized: false
+    remember_size: true
+    show_toolbar: true
+    show_status_bar: true
+  spreadsheet:
+    max_rows: 500
+    max_cols: 50
+    header_row: true
+    grid_lines: true
+    freeze_header: true
+  document:
+    max_paragraphs: 5000
+    show_page_breaks: true
+  image:
+    fit: contain
+    background: "#1e1e1e"
+    checkerboard: true
+  hex:
+    bytes_per_row: 16
+    uppercase: true
+    show_ascii: true
+  directory:
+    max_depth: 5
+    lazy_expand: true
+
+behavior:
+  preview_fallback: terminal
+  on_unknown_format: fallback

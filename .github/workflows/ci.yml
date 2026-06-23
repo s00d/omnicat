@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test-rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --check
+      - run: cargo clippy -- -D warnings
+      - run: cargo test --all
+      - run: cargo build --release
+      - name: Smoke tests (Unix)
+        if: runner.os != 'Windows'
+        run: OMNICAT_BIN=target/release/omnicat ./test/run.sh
+
+  test-legacy:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Legacy bash passthrough tests
+        run: |
+          BIN="legacy/bin/smartcat"
+          MD="$(mktemp)"
+          printf '# hi\n' > "$MD"
+          test "$(command cat "$MD")" = "$("$BIN" "$MD" | command cat)"

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">
+  <description>
+    <title-info>
+      <book-title>omnicat FB2 demo</book-title>
+      <author><first-name>Demo</first-name><last-name>Author</last-name></author>
+    </title-info>
+  </description>
+  <body>
+    <title><p>Chapter 1</p></title>
+    <section>
+      <p>FictionBook2 sample for ebook preview.</p>
+      <p>Second paragraph of demo content.</p>
+    </section>
+  </body>
+</FictionBook>
