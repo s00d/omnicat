@@ -93,7 +93,9 @@ fn extract_docx(path: &Path, max_paragraphs: usize) -> Result<String> {
 fn extract_odt_text(path: &Path, max_paragraphs: usize) -> Result<String> {
     let file = std::fs::File::open(path)?;
     let mut archive = ZipArchive::new(file).context("invalid odt zip")?;
-    let mut content = archive.by_name("content.xml").context("missing content.xml")?;
+    let mut content = archive
+        .by_name("content.xml")
+        .context("missing content.xml")?;
     let mut xml = String::new();
     content.read_to_string(&mut xml)?;
     let mut out = String::new();

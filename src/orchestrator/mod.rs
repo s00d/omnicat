@@ -7,10 +7,10 @@ use anyhow::Result;
 use crate::config::OmnicatConfig;
 use crate::content::PreviewContent;
 use crate::detect::HandlerKind;
-use crate::drivers::external;
-use crate::drivers::image::ImageDriver;
 use crate::drivers::code::CodeDriver;
 use crate::drivers::ebook::EbookDriver;
+use crate::drivers::external;
+use crate::drivers::image::ImageDriver;
 use crate::drivers::markdown::MarkdownDriver;
 use crate::drivers::media::MediaDriver;
 use crate::sinks::gui;
@@ -22,9 +22,7 @@ pub mod resolve;
 pub use resolve::ResolvedHandler;
 
 use registry::DriverRegistry;
-use resolve::{
-    detect_custom, handler_config_for_builtin, handler_config_for_custom,
-};
+use resolve::{detect_custom, handler_config_for_builtin, handler_config_for_custom};
 
 pub struct PreviewOrchestrator;
 
@@ -66,11 +64,7 @@ impl PreviewOrchestrator {
         }
     }
 
-    pub fn build(
-        kind: HandlerKind,
-        path: &Path,
-        config: &OmnicatConfig,
-    ) -> Result<PreviewContent> {
+    pub fn build(kind: HandlerKind, path: &Path, config: &OmnicatConfig) -> Result<PreviewContent> {
         Self::build_resolved(&ResolvedHandler::Builtin(kind), path, config)
     }
 
@@ -127,20 +121,18 @@ impl PreviewOrchestrator {
         Self::render_terminal_resolved(&ResolvedHandler::Builtin(kind), path, config, out)
     }
 
-    pub fn open_gui(
-        path: &Path,
-        config: &OmnicatConfig,
-        content: &PreviewContent,
-    ) -> Result<()> {
+    pub fn open_gui(path: &Path, config: &OmnicatConfig, content: &PreviewContent) -> Result<()> {
         gui::run(path, config, content)
     }
 
     pub fn hint_for(resolved: &ResolvedHandler, config: &OmnicatConfig) -> Option<String> {
         match resolved {
-            ResolvedHandler::Builtin(kind) => handler_config_for_builtin(*kind, config)
-                .and_then(|h| h.hint.clone()),
-            ResolvedHandler::Custom(name) => handler_config_for_custom(name, config)
-                .and_then(|h| h.hint.clone()),
+            ResolvedHandler::Builtin(kind) => {
+                handler_config_for_builtin(*kind, config).and_then(|h| h.hint.clone())
+            }
+            ResolvedHandler::Custom(name) => {
+                handler_config_for_custom(name, config).and_then(|h| h.hint.clone())
+            }
         }
     }
 }

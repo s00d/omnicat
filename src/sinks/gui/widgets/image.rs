@@ -17,7 +17,9 @@ pub fn render_image(ui: &mut egui::Ui, img: &ImageContent, config: &OmnicatConfi
         "cover" => ui.available_size(),
         _ => {
             let max = ui.available_size();
-            let scale = (max.x / img.width as f32).min(max.y / img.height as f32).min(1.0);
+            let scale = (max.x / img.width as f32)
+                .min(max.y / img.height as f32)
+                .min(1.0);
             egui::Vec2::new(img.width as f32 * scale, img.height as f32 * scale)
         }
     };

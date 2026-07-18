@@ -145,10 +145,7 @@ mod tests {
     fn table_has_horizontal_row_separators() {
         let mut buf = Vec::new();
         let header = vec!["A".into(), "B".into()];
-        let rows = vec![
-            vec!["1".into(), "2".into()],
-            vec!["3".into(), "4".into()],
-        ];
+        let rows = vec![vec!["1".into(), "2".into()], vec!["3".into(), "4".into()]];
         let mut config = OmnicatConfig::default();
         config.terminal.markdown.wrap_width = 80;
         render_table(&mut buf, Some(header), rows, &[], &config).unwrap();

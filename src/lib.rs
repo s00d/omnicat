@@ -131,8 +131,7 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
                 path,
                 &render_config,
                 &mut buf,
-            )
-            {
+            ) {
                 eprintln!("{APP_NAME}: {err:#}");
                 if let Some(handler) = handler_config_for_resolved(&resolved, &config) {
                     print_hint(handler);
@@ -148,8 +147,7 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
                 path,
                 &render_config,
                 &mut stdout,
-            )
-            {
+            ) {
                 drop(stdout);
                 eprintln!("{APP_NAME}: {err:#}");
                 if let Some(handler) = handler_config_for_resolved(&resolved, &config) {

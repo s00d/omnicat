@@ -71,9 +71,7 @@ fn collect_dir(
         return Ok(());
     }
 
-    let mut items: Vec<_> = fs::read_dir(current)?
-        .filter_map(|e| e.ok())
-        .collect();
+    let mut items: Vec<_> = fs::read_dir(current)?.filter_map(|e| e.ok()).collect();
     items.sort_by(|a, b| {
         let a_dir = a.file_type().map(|t| t.is_dir()).unwrap_or(false);
         let b_dir = b.file_type().map(|t| t.is_dir()).unwrap_or(false);
@@ -107,7 +105,11 @@ fn collect_dir(
         } else {
             name.clone()
         };
-        let rel_path = if rel.is_empty() { display_name.clone() } else { rel };
+        let rel_path = if rel.is_empty() {
+            display_name.clone()
+        } else {
+            rel
+        };
         let size = if is_dir { None } else { Some(meta.len()) };
         let mode = if is_dir {
             Some("drwxr-xr-x".into())

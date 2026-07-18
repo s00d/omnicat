@@ -25,7 +25,7 @@ pub fn play_audio_with_progress(
     let mut handle =
         DeviceSinkBuilder::open_default_sink().context("no audio output device available")?;
     handle.log_on_drop(false);
-    let player = Player::connect_new(&handle.mixer());
+    let player = Player::connect_new(handle.mixer());
     player.append(source);
 
     let mut stdout = std::io::stdout();

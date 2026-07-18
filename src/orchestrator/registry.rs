@@ -5,8 +5,8 @@ use anyhow::Result;
 
 use crate::config::OmnicatConfig;
 use crate::content::{preview_context, PreviewContent};
-use crate::detect::HandlerKind;
 use crate::detect::mime::mime_matches;
+use crate::detect::HandlerKind;
 use crate::drivers::archive::ArchiveDriver;
 use crate::drivers::code::CodeDriver;
 use crate::drivers::data::DataDriver;

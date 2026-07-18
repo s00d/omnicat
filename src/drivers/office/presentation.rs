@@ -69,7 +69,9 @@ fn extract_pptx_slides(path: &Path) -> Result<Vec<String>> {
 fn extract_odp_slides(path: &Path) -> Result<Vec<String>> {
     let file = std::fs::File::open(path)?;
     let mut archive = ZipArchive::new(file).context("invalid odp zip")?;
-    let mut content = archive.by_name("content.xml").context("missing content.xml")?;
+    let mut content = archive
+        .by_name("content.xml")
+        .context("missing content.xml")?;
     let mut xml = String::new();
     content.read_to_string(&mut xml)?;
     Ok(vec![extract_text_from_xml(&xml)])

@@ -10,11 +10,10 @@ use crate::content::PreviewContent;
 use crate::sinks::gui::widgets::{code_theme_for_config, render_content, SourceEditorState};
 
 pub fn run(path: &Path, config: &OmnicatConfig, content: &PreviewContent) -> Result<()> {
-    let title = config
-        .gui
-        .window
-        .title_template
-        .replace("{file}", &path.file_name().unwrap_or_default().to_string_lossy());
+    let title = config.gui.window.title_template.replace(
+        "{file}",
+        &path.file_name().unwrap_or_default().to_string_lossy(),
+    );
 
     let width = config.gui.window.width as f32;
     let height = config.gui.window.height as f32;
@@ -131,8 +130,7 @@ impl eframe::App for PreviewApp {
         }
 
         self.editor.sync_buffer(&self.content);
-        let code_theme =
-            code_theme_for_config(&ctx, ui.style(), self.font_size, &self.config);
+        let code_theme = code_theme_for_config(&ctx, ui.style(), self.font_size, &self.config);
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
             let size = ui.available_size();

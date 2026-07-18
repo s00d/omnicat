@@ -66,10 +66,7 @@ pub enum PreviewContent {
     MediaInfo(MediaInfoContent),
     FontInfo(FontInfoContent),
     Database(DatabaseContent),
-    Unsupported {
-        reason: String,
-        suggestion: String,
-    },
+    Unsupported { reason: String, suggestion: String },
 }
 
 impl PreviewContent {

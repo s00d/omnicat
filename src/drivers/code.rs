@@ -82,9 +82,9 @@ impl PreviewDriver for CodeDriver {
 
     fn extensions(&self) -> &'static [&'static str] {
         &[
-            "py", "js", "ts", "tsx", "jsx", "sh", "zsh", "bash", "rb", "go", "rs", "c", "h",
-            "cpp", "hpp", "java", "kt", "swift", "lua", "sql", "html", "css", "scss", "vue",
-            "php", "pl", "r", "xml", "svg",
+            "py", "js", "ts", "tsx", "jsx", "sh", "zsh", "bash", "rb", "go", "rs", "c", "h", "cpp",
+            "hpp", "java", "kt", "swift", "lua", "sql", "html", "css", "scss", "vue", "php", "pl",
+            "r", "xml", "svg",
         ]
     }
 
@@ -102,12 +102,8 @@ impl PreviewDriver for CodeDriver {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("txt");
         let show_numbers =
             config.terminal.code.line_numbers && config.terminal.code.style != "plain";
-        let highlighted = highlight_source(
-            &source,
-            ext,
-            Self::code_theme_name(config),
-            show_numbers,
-        )?;
+        let highlighted =
+            highlight_source(&source, ext, Self::code_theme_name(config), show_numbers)?;
         Ok(PreviewContent::HighlightedCode(highlighted))
     }
 }
@@ -140,7 +136,11 @@ mod tests {
         let path = dir.path().join("sample.rs");
         std::fs::write(&path, "fn main() {}\n").unwrap();
         let content = CodeDriver
-            .build(&path, &OmnicatConfig::default(), &crate::content::preview_context(&path))
+            .build(
+                &path,
+                &OmnicatConfig::default(),
+                &crate::content::preview_context(&path),
+            )
             .unwrap();
         match content {
             PreviewContent::HighlightedCode(code) => {

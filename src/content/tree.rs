@@ -89,12 +89,10 @@ impl TreeNode {
     }
 
     pub fn sort_recursive(&mut self) {
-        self.children.sort_by(|a, b| {
-            match (a.is_dir, b.is_dir) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-            }
+        self.children.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
         });
         for c in &mut self.children {
             c.sort_recursive();
@@ -132,14 +130,15 @@ pub fn render_tree_unicode(
     if !node.name.is_empty() || !node.path.is_empty() {
         let branch = if is_last { "└── " } else { "├── " };
         let icon = if icons {
-            if node.is_dir { "📁 " } else { "📄 " }
+            if node.is_dir {
+                "📁 "
+            } else {
+                "📄 "
+            }
         } else {
             ""
         };
-        let size = node
-            .size
-            .map(|s| format!(" ({s} B)"))
-            .unwrap_or_default();
+        let size = node.size.map(|s| format!(" ({s} B)")).unwrap_or_default();
         let mode = node
             .mode
             .as_ref()

@@ -82,14 +82,8 @@ pub fn render_source_view(
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     ui.set_min_width(ui.available_width());
-                    let mut job = highlight_with(
-                        ui.ctx(),
-                        ui.style(),
-                        &theme,
-                        source,
-                        &lang,
-                        syntect,
-                    );
+                    let mut job =
+                        highlight_with(ui.ctx(), ui.style(), &theme, source, &lang, syntect);
                     job.wrap.max_width = f32::INFINITY;
                     ui.add(egui::Label::new(job).selectable(true));
                 });

@@ -14,14 +14,8 @@ pub struct EbookDriver;
 
 /// Extensions routed to the ebook driver (order matters for docs only).
 pub const EBOOK_EXTENSIONS: &[&str] = &[
-    "epub",
-    "mobi", "azw", "azw1", "azw2", "azw3", "prc", "pdb",
-    "fb2", "fbz",
-    "lit",
-    "djvu", "djv",
-    "cbz",
-    "cbr",
-    "opf",
+    "epub", "mobi", "azw", "azw1", "azw2", "azw3", "prc", "pdb", "fb2", "fbz", "lit", "djvu",
+    "djv", "cbz", "cbr", "opf",
 ];
 
 impl EbookDriver {
@@ -393,7 +387,7 @@ fn append_decoded_snippets(out: &mut String, bytes: &[u8]) {
     if bytes.is_empty() {
         return;
     }
-    if bytes.len() >= 2 && bytes.len() % 2 == 0 {
+    if bytes.len() >= 2 && bytes.len().is_multiple_of(2) {
         let utf16: Vec<u16> = bytes
             .chunks_exact(2)
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
@@ -450,7 +444,8 @@ mod tests {
 
     #[test]
     fn fb2_text_extraction() {
-        let xml = r#"<?xml version="1.0"?><FictionBook><body><p>Hello FB2</p></body></FictionBook>"#;
+        let xml =
+            r#"<?xml version="1.0"?><FictionBook><body><p>Hello FB2</p></body></FictionBook>"#;
         let text = extract_fb2_text(xml, 10).unwrap();
         assert!(text.contains("Hello FB2"));
     }
@@ -463,7 +458,8 @@ mod tests {
 
     #[test]
     fn large_fixture_has_many_lines_when_unlimited() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo/files/sample-large.mobi");
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo/files/sample-large.mobi");
         if !path.exists() {
             return;
         }

@@ -82,7 +82,11 @@ fn build_archive_tree(path: &Path, config: &OmnicatConfig) -> Result<FileTree> {
         collect_tar(path, false)?
     };
 
-    Ok(build_tree_from_entries(title, entries.into_iter().take(max), max))
+    Ok(build_tree_from_entries(
+        title,
+        entries.into_iter().take(max),
+        max,
+    ))
 }
 
 fn collect_zip(path: &Path) -> Result<Vec<ArchiveEntry>> {

@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::config::{HandlerConfig, OmnicatConfig};
-use crate::detect::HandlerKind;
 use crate::detect::mime::mime_matches;
+use crate::detect::HandlerKind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedHandler {
@@ -39,11 +39,7 @@ pub fn detect_custom(path: &Path, config: &OmnicatConfig) -> Option<String> {
     None
 }
 
-pub fn handler_matches_path(
-    handler: &HandlerConfig,
-    path: &Path,
-    ext: Option<&str>,
-) -> bool {
+pub fn handler_matches_path(handler: &HandlerConfig, path: &Path, ext: Option<&str>) -> bool {
     if let Some(ext) = ext {
         if handler
             .extensions

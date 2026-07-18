@@ -118,11 +118,11 @@ fn write_media_info(info: &MediaInfoContent, out: &mut dyn Write) -> Result<()> 
 
 fn extract_audio_meta(path: &Path, ctx: &PreviewContext) -> Result<MediaInfoContent> {
     use symphonia::core::codecs::audio::CODEC_ID_NULL_AUDIO;
-    use symphonia::core::units::Timestamp;
     use symphonia::core::formats::probe::Hint;
     use symphonia::core::formats::{FormatOptions, TrackType};
     use symphonia::core::io::MediaSourceStream;
     use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::units::Timestamp;
 
     let src = File::open(path).context("open audio")?;
     let mss = MediaSourceStream::new(Box::new(src), Default::default());
@@ -131,7 +131,12 @@ fn extract_audio_meta(path: &Path, ctx: &PreviewContext) -> Result<MediaInfoCont
         hint.with_extension(ext);
     }
     let format = symphonia::default::get_probe()
-        .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
+        .probe(
+            &hint,
+            mss,
+            FormatOptions::default(),
+            MetadataOptions::default(),
+        )
         .context("probe audio")?;
     let track = format.default_track(TrackType::Audio);
     let codec = track.as_ref().and_then(|t| {
@@ -200,8 +205,7 @@ fn extract_video_meta(path: &Path, ctx: &PreviewContext) -> Result<MediaInfoCont
                         if let (Some(duration), Some(timescale)) =
                             (&track.duration, &track.timescale)
                         {
-                            duration_secs =
-                                Some(duration.0 as f64 / timescale.0.max(1) as f64);
+                            duration_secs = Some(duration.0 as f64 / timescale.0.max(1) as f64);
                         }
                         break;
                     }

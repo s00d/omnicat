@@ -31,7 +31,8 @@ impl PreviewDriver for DatabaseDriver {
     ) -> Result<PreviewContent> {
         let conn = Connection::open(path).context("open sqlite")?;
         let mut schema = String::new();
-        let mut stmt = conn.prepare("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name")?;
+        let mut stmt =
+            conn.prepare("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name")?;
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
         for row in rows {
             schema.push_str(&row?);

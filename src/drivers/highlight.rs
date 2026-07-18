@@ -39,11 +39,7 @@ pub fn highlight_source(
             .map(|(style, text)| style_to_span(style, text))
             .collect();
         lines.push(HighlightedLine {
-            line_no: if line_numbers {
-                Some(idx + 1)
-            } else {
-                None
-            },
+            line_no: if line_numbers { Some(idx + 1) } else { None },
             spans,
         });
     }
@@ -88,10 +84,8 @@ mod tests {
             .iter()
             .flat_map(|line| line.spans.iter().map(|s| s.foreground))
             .collect();
-        let distinct: std::collections::HashSet<_> = colors
-            .iter()
-            .map(|c| (c.r, c.g, c.b))
-            .collect();
+        let distinct: std::collections::HashSet<_> =
+            colors.iter().map(|c| (c.r, c.g, c.b)).collect();
         assert!(
             distinct.len() >= 2,
             "expected multiple syntax colors, got {distinct:?}"

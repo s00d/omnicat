@@ -25,10 +25,7 @@ pub fn render_table(
     let body_fg = ui.visuals().text_color();
     let has_header = config.gui.spreadsheet.header_row && !table.headers.is_empty();
     let grid_lines = config.gui.spreadsheet.grid_lines;
-    let table_id = table
-        .title
-        .as_deref()
-        .unwrap_or("omnicat-table");
+    let table_id = table.title.as_deref().unwrap_or("omnicat-table");
 
     egui::ScrollArea::both()
         .id_salt(table_id)

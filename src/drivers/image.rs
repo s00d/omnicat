@@ -37,7 +37,9 @@ impl PreviewDriver for ImageDriver {
     }
 
     fn extensions(&self) -> &'static [&'static str] {
-        &["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "heic", "ico"]
+        &[
+            "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "heic", "ico",
+        ]
     }
 
     fn mime_patterns(&self) -> &'static [&'static str] {

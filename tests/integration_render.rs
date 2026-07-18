@@ -149,8 +149,8 @@ fn demo_fixtures_build_and_render_in_pty() {
         let path = demo.join(rel);
         assert!(path.exists(), "missing demo fixture: {}", path.display());
 
-        let resolved =
-            omnicat::orchestrator::PreviewOrchestrator::resolve(&path, &cfg).or_else(|| {
+        let resolved = omnicat::orchestrator::PreviewOrchestrator::resolve(&path, &cfg)
+            .or_else(|| {
                 if cfg.behavior.on_unknown_format == "fallback" {
                     Some(omnicat::orchestrator::resolve::ResolvedHandler::Builtin(
                         omnicat::detect::HandlerKind::Fallback,
@@ -166,11 +166,7 @@ fn demo_fixtures_build_and_render_in_pty() {
                 panic!("unexpected custom handler {n} for {rel}")
             }
         };
-        assert_eq!(
-            kind_name, *kind,
-            "handler mismatch for {}",
-            path.display()
-        );
+        assert_eq!(kind_name, *kind, "handler mismatch for {}", path.display());
 
         let content =
             omnicat::orchestrator::PreviewOrchestrator::build_resolved(&resolved, &path, &cfg)

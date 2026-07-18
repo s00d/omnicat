@@ -107,9 +107,7 @@ struct CommandOutput {
 fn run_template_capture(template: &str, path: &Path, timeout: Duration) -> Result<CommandOutput> {
     let resolved = substitute_template(template, path);
     let args = shell_words::split(&resolved).context("invalid command template")?;
-    let (program, args) = args
-        .split_first()
-        .context("empty command template")?;
+    let (program, args) = args.split_first().context("empty command template")?;
 
     let mut child = Command::new(program);
     child.args(args);
@@ -154,10 +152,7 @@ mod tests {
 
     #[test]
     fn first_available_skips_missing() {
-        let cmds = vec![
-            "missing-tool-xyz {file}".into(),
-            "cat {file}".into(),
-        ];
+        let cmds = vec!["missing-tool-xyz {file}".into(), "cat {file}".into()];
         assert_eq!(first_available_command(&cmds), Some("cat {file}"));
     }
 

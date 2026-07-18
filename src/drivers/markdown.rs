@@ -111,7 +111,11 @@ impl<'a> MarkdownRenderer<'a> {
         match tag {
             Tag::Paragraph => {}
             Tag::Heading { level, .. } => {
-                write!(self.out, "{}", heading_color(level, &self.theme, self.plain))?;
+                write!(
+                    self.out,
+                    "{}",
+                    heading_color(level, &self.theme, self.plain)
+                )?;
             }
             Tag::BlockQuote(_) => {
                 self.blockquote_depth += 1;
@@ -154,9 +158,14 @@ impl<'a> MarkdownRenderer<'a> {
                 self.in_image = true;
                 self.image_alt = title.to_string();
             }
-            Tag::HtmlBlock | Tag::FootnoteDefinition(_) | Tag::DefinitionList
-            | Tag::DefinitionListTitle | Tag::DefinitionListDefinition | Tag::MetadataBlock(_)
-            | Tag::Superscript | Tag::Subscript => {}
+            Tag::HtmlBlock
+            | Tag::FootnoteDefinition(_)
+            | Tag::DefinitionList
+            | Tag::DefinitionListTitle
+            | Tag::DefinitionListDefinition
+            | Tag::MetadataBlock(_)
+            | Tag::Superscript
+            | Tag::Subscript => {}
         }
         Ok(())
     }
@@ -210,9 +219,14 @@ impl<'a> MarkdownRenderer<'a> {
                 self.in_image = false;
                 self.image_alt.clear();
             }
-            TagEnd::HtmlBlock | TagEnd::FootnoteDefinition | TagEnd::DefinitionList
-            | TagEnd::DefinitionListTitle | TagEnd::DefinitionListDefinition
-            | TagEnd::MetadataBlock(_) | TagEnd::Superscript | TagEnd::Subscript => {}
+            TagEnd::HtmlBlock
+            | TagEnd::FootnoteDefinition
+            | TagEnd::DefinitionList
+            | TagEnd::DefinitionListTitle
+            | TagEnd::DefinitionListDefinition
+            | TagEnd::MetadataBlock(_)
+            | TagEnd::Superscript
+            | TagEnd::Subscript => {}
         }
         Ok(())
     }
@@ -383,11 +397,7 @@ fn render_fenced_code(
 
     if plain {
         for line in LinesWithEndings::from(code) {
-            write!(
-                out,
-                "  {}",
-                line.strip_suffix('\n').unwrap_or(line)
-            )?;
+            write!(out, "  {}", line.strip_suffix('\n').unwrap_or(line))?;
             if line.ends_with('\n') {
                 writeln!(out)?;
             }
@@ -580,7 +590,11 @@ mod tests {
         let path = dir.path().join("sample.md");
         std::fs::write(&path, "# Title\n\nHello.\n").unwrap();
         let content = MarkdownDriver
-            .build(&path, &OmnicatConfig::default(), &crate::content::preview_context(&path))
+            .build(
+                &path,
+                &OmnicatConfig::default(),
+                &crate::content::preview_context(&path),
+            )
             .unwrap();
         match content {
             PreviewContent::Markdown(text) => {
@@ -614,7 +628,10 @@ mod tests {
         let second = rendered.find("Second paragraph.").unwrap();
         assert!(second > gap);
         let between = &rendered[gap + "First paragraph.".len()..second];
-        assert!(between.contains("\n\n"), "expected blank line between paragraphs: {between:?}");
+        assert!(
+            between.contains("\n\n"),
+            "expected blank line between paragraphs: {between:?}"
+        );
     }
 
     #[test]
@@ -669,16 +686,13 @@ mod tests {
 
     #[test]
     fn table_uses_borders() {
-        let rendered = render(
-            "| Col A | Col B |\n|-------|-------|\n| one   | two   |\n| three | four  |\n",
-        );
+        let rendered =
+            render("| Col A | Col B |\n|-------|-------|\n| one   | two   |\n| three | four  |\n");
         assert!(rendered.contains("Col A"));
         assert!(rendered.contains("one"));
         assert!(rendered.contains("three"));
         assert!(
-            rendered.contains('│')
-                || rendered.contains('─')
-                || rendered.contains('|'),
+            rendered.contains('│') || rendered.contains('─') || rendered.contains('|'),
             "expected table output: {rendered}"
         );
         assert!(
@@ -721,9 +735,7 @@ mod tests {
 
     #[test]
     fn mermaid_flowchart_renders_as_diagram() {
-        let rendered = render(
-            "```mermaid\ngraph LR\n    A[Build] --> B[Deploy]\n```\n",
-        );
+        let rendered = render("```mermaid\ngraph LR\n    A[Build] --> B[Deploy]\n```\n");
         assert!(
             rendered.contains("Build") && rendered.contains("Deploy"),
             "expected node labels in diagram: {rendered}"

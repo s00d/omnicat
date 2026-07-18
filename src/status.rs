@@ -20,7 +20,14 @@ pub fn print_status() -> Result<()> {
 
     println!("{APP_NAME} {VERSION}");
     println!("config: {config_label}");
-    println!("gui: {}", if gui_available() { "available" } else { "unavailable" });
+    println!(
+        "gui: {}",
+        if gui_available() {
+            "available"
+        } else {
+            "unavailable"
+        }
+    );
     println!();
 
     println!("BUILT-IN HANDLERS");
@@ -52,7 +59,10 @@ pub fn print_status() -> Result<()> {
     let customs = custom_handlers(&config);
     if !customs.is_empty() {
         println!("\nCUSTOM HANDLERS");
-        println!("{:<14} {:<24} {:<28} EXTENSIONS", "TYPE", "BUILTIN", "EXTERNAL");
+        println!(
+            "{:<14} {:<24} {:<28} EXTENSIONS",
+            "TYPE", "BUILTIN", "EXTERNAL"
+        );
         for name in customs {
             if let Some(handler) = config.handlers.get(name) {
                 let exts = handler.extensions.join(", ");
@@ -69,7 +79,9 @@ pub fn print_status() -> Result<()> {
                     .unwrap_or_else(|| "none".into());
                 println!(
                     "{:<14} {:<24} {:<28} {exts}",
-                    name, "—", format!("{external}  → {active}"),
+                    name,
+                    "—",
+                    format!("{external}  → {active}"),
                 );
             }
         }
@@ -95,11 +107,7 @@ pub fn print_status() -> Result<()> {
 fn active_renderer_label(kind: HandlerKind, config: &OmnicatConfig) -> String {
     if let Some(handler) = handler_config_for_builtin(kind, config) {
         if let Some(cmd) = first_available_command(&handler.commands) {
-            return cmd
-                .split_whitespace()
-                .next()
-                .unwrap_or(cmd)
-                .to_string();
+            return cmd.split_whitespace().next().unwrap_or(cmd).to_string();
         }
     }
     String::new()
@@ -129,7 +137,11 @@ fn print_gui_settings(cfg: &OmnicatConfig) {
     let _ = writeln!(buf, "  theme.mode: {}", g.theme.mode);
     let _ = writeln!(buf, "  theme.font_size: {}", g.theme.font_size);
     let _ = writeln!(buf, "  spreadsheet.max_rows: {}", g.spreadsheet.max_rows);
-    let _ = writeln!(buf, "  document.max_paragraphs: {}", g.document.max_paragraphs);
+    let _ = writeln!(
+        buf,
+        "  document.max_paragraphs: {}",
+        g.document.max_paragraphs
+    );
     print!("{buf}");
 }
 
@@ -152,7 +164,10 @@ mod tests {
 
     #[test]
     fn command_status_labels() {
-        assert!(matches!(command_status_label("definitely-not-a-real-binary-xyz"), "(-)"));
+        assert!(matches!(
+            command_status_label("definitely-not-a-real-binary-xyz"),
+            "(-)"
+        ));
     }
 
     #[test]

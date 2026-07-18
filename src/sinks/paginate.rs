@@ -27,9 +27,8 @@ enum Nav {
 }
 
 pub fn pagination_requested(config: &crate::config::OmnicatConfig, cli_paginate: bool) -> bool {
-    let env_on = std::env::var_os("OMNICAT_PAGINATE").is_some_and(|v| {
-        v != "0" && v != "false" && v != "no"
-    });
+    let env_on =
+        std::env::var_os("OMNICAT_PAGINATE").is_some_and(|v| v != "0" && v != "false" && v != "no");
     if !cli_paginate && !config.terminal.paginate.enabled && !env_on {
         return false;
     }
@@ -101,11 +100,11 @@ fn terminal_cols() -> usize {
 }
 
 fn line_payload(line: &[u8]) -> Vec<u8> {
-    let end = line
-        .last()
-        .is_some_and(|&b| b == b'\n')
-        .then(|| line.len().saturating_sub(1))
-        .unwrap_or(line.len());
+    let end = if line.last().is_some_and(|&b| b == b'\n') {
+        line.len().saturating_sub(1)
+    } else {
+        line.len()
+    };
     line[..end].to_vec()
 }
 
@@ -230,12 +229,7 @@ fn interactive_pager(pages: &[Page], status_row: u16) -> Result<()> {
         Ok(())
     })();
 
-    execute!(
-        stdout,
-        Show,
-        LeaveAlternateScreen,
-        EnableLineWrap,
-    )?;
+    execute!(stdout, Show, LeaveAlternateScreen, EnableLineWrap,)?;
     terminal::disable_raw_mode()?;
     result
 }

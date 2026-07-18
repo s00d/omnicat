@@ -118,18 +118,21 @@ fn pretty_ini(raw: &str) -> Result<String> {
 }
 
 fn render_csv(raw: &str, config: &OmnicatConfig) -> Result<String> {
-    Ok(render_delimited_terminal(raw, b',', config)?)
+    render_delimited_terminal(raw, b',', config)
 }
 
 fn render_tsv(raw: &str, config: &OmnicatConfig) -> Result<String> {
-    Ok(render_delimited_terminal(raw, b'\t', config)?)
+    render_delimited_terminal(raw, b'\t', config)
 }
 
 fn parse_delimited(raw: &str, delimiter: u8, config: &OmnicatConfig) -> Result<TableContent> {
     let records = read_delimited_records(raw, delimiter)?;
-    let max_rows = config.gui.spreadsheet.max_rows.min(config.terminal.data.max_rows);
-    let (headers, rows) =
-        table_from_records(records, max_rows, config.gui.spreadsheet.header_row);
+    let max_rows = config
+        .gui
+        .spreadsheet
+        .max_rows
+        .min(config.terminal.data.max_rows);
+    let (headers, rows) = table_from_records(records, max_rows, config.gui.spreadsheet.header_row);
     Ok(TableContent {
         title: None,
         headers,
@@ -162,7 +165,13 @@ fn read_delimited_records(raw: &str, delimiter: u8) -> Result<Vec<Vec<String>>> 
         .from_reader(raw.as_bytes());
     let mut records = Vec::new();
     for result in rdr.records() {
-        records.push(result.context("csv parse error")?.iter().map(str::to_string).collect());
+        records.push(
+            result
+                .context("csv parse error")?
+                .iter()
+                .map(str::to_string)
+                .collect(),
+        );
     }
     Ok(records)
 }
@@ -185,7 +194,12 @@ fn table_from_records(
     }
 }
 
-fn highlight_data(text: &str, ext: &str, config: &OmnicatConfig, out: &mut dyn Write) -> Result<()> {
+fn highlight_data(
+    text: &str,
+    ext: &str,
+    config: &OmnicatConfig,
+    out: &mut dyn Write,
+) -> Result<()> {
     if matches!(ext, "csv" | "tsv") || config.terminal.plain {
         writeln!(out, "{text}")?;
         return Ok(());
@@ -235,9 +249,9 @@ fn build_parquet_table(path: &Path, config: &OmnicatConfig) -> Result<PreviewCon
     let max_rows = config.gui.spreadsheet.max_rows.min(20);
     let mut preview = Table::new();
     preview.load_preset(UTF8_FULL);
-        if let Ok(batch_reader) = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(
-        File::open(path)?,
-    ) {
+    if let Ok(batch_reader) =
+        parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(File::open(path)?)
+    {
         if let Ok(mut batches) = batch_reader.build() {
             if let Some(Ok(batch)) = batches.next() {
                 let cols: Vec<String> = (0..batch.num_columns())
@@ -270,7 +284,13 @@ fn array_cell_string(array: &dyn arrow::array::Array, row: usize) -> String {
         arrow::datatypes::DataType::Utf8 => array
             .as_any()
             .downcast_ref::<StringArray>()
-            .and_then(|a| if a.is_valid(row) { Some(a.value(row).to_string()) } else { None })
+            .and_then(|a| {
+                if a.is_valid(row) {
+                    Some(a.value(row).to_string())
+                } else {
+                    None
+                }
+            })
             .unwrap_or_default(),
         arrow::datatypes::DataType::Int64 => array
             .as_any()
@@ -300,7 +320,10 @@ fn build_feather_table(path: &Path, config: &OmnicatConfig) -> Result<PreviewCon
     table.load_preset(UTF8_FULL);
     table.set_header(vec!["Column", "Type"]);
     for field in schema.fields() {
-        table.add_row(vec![field.name().clone(), format!("{:?}", field.data_type())]);
+        table.add_row(vec![
+            field.name().clone(),
+            format!("{:?}", field.data_type()),
+        ]);
     }
     let max_rows = config.gui.spreadsheet.max_rows.min(20);
     let mut preview = Table::new();
@@ -340,14 +363,21 @@ mod tests {
         let path = dir.path().join("sample.csv");
         std::fs::write(&path, "name,score\nalpha,1\nbeta,2\n").unwrap();
         let content = DataDriver
-            .build(&path, &OmnicatConfig::default(), &crate::content::preview_context(&path))
+            .build(
+                &path,
+                &OmnicatConfig::default(),
+                &crate::content::preview_context(&path),
+            )
             .unwrap();
         match content {
             PreviewContent::Table(table) => {
                 assert_eq!(table.headers, vec!["name", "score"]);
                 assert_eq!(table.rows.len(), 2);
                 let flat = format!("{table:?}");
-                assert!(!flat.contains("\x1b["), "table must not contain ANSI escapes");
+                assert!(
+                    !flat.contains("\x1b["),
+                    "table must not contain ANSI escapes"
+                );
             }
             other => panic!("expected Table, got {other:?}"),
         }

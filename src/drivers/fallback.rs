@@ -37,7 +37,10 @@ impl PreviewDriver for FallbackDriver {
         };
 
         if let Ok(text) = std::str::from_utf8(slice) {
-            if text.chars().all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace()) {
+            if text
+                .chars()
+                .all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace())
+            {
                 return Ok(PreviewContent::Text(text.to_string()));
             }
         }
