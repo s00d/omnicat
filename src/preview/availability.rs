@@ -5,10 +5,7 @@ pub fn gui_available() -> bool {
 
     #[cfg(target_os = "linux")]
     {
-        if std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("DISPLAY").is_ok() {
-            return true;
-        }
-        return false;
+        std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("DISPLAY").is_ok()
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
