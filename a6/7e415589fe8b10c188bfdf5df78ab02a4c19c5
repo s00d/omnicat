@@ -1,0 +1,19 @@
+src/cat.rs
+  s_2b45b11a861944::t_a11e34dbf7b244 50-51,53-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "a67e415589fe8b10c188bfdf5df78ab02a4c19c5",
+  "prompts": {},
+  "sessions": {
+    "s_2b45b11a861944": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8092400a-8090-42c4-baf7-ed730bec784c",
+        "model": "default"
+      },
+      "human_author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  }
+}
