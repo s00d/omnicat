@@ -1,0 +1,19 @@
+src/preview/availability.rs
+  s_2b45b11a861944::t_d07fd803df9665 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "3347f6cdcac98568fff0cb9d74a536d0665b9e05",
+  "prompts": {},
+  "sessions": {
+    "s_2b45b11a861944": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8092400a-8090-42c4-baf7-ed730bec784c",
+        "model": "default"
+      },
+      "human_author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  }
+}
