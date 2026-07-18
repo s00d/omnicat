@@ -47,8 +47,13 @@ pub fn builtin_cat_file(path: &str) -> Result<()> {
 pub fn exec_system_cat(args: &[&str]) -> Result<()> {
     #[cfg(unix)]
     {
+        // Prefer an absolute path so an `alias cat=omnicat` (or PATH shadow) cannot
+        // recurse, but keep argv0 as `cat` so error messages match GNU/BSD cat.
         let cat = find_system_cat();
-        let err = std::process::Command::new(&cat).args(args).exec();
+        let err = std::process::Command::new(&cat)
+            .arg0("cat")
+            .args(args)
+            .exec();
         Err(anyhow::Error::from(err))
     }
 
