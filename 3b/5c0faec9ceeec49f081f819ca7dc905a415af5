@@ -1,0 +1,23 @@
+Cargo.toml
+  s_2b45b11a861944::t_40e52182bee1d8 3
+README.md
+  s_2b45b11a861944::t_65de3095cef03a 1
+Formula/omnicat.rb
+  s_2b45b11a861944::t_355035d11b6d32 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "3b5c0faec9ceeec49f081f819ca7dc905a415af5",
+  "prompts": {},
+  "sessions": {
+    "s_2b45b11a861944": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8092400a-8090-42c4-baf7-ed730bec784c",
+        "model": "default"
+      },
+      "human_author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  }
+}
