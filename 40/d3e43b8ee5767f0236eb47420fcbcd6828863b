@@ -1,0 +1,22 @@
+src/drivers/media.rs
+  s_2b45b11a861944::t_051b49400d2a0a 38-42
+tests/integration_render.rs
+  s_2b45b11a861944::t_ca68a025f4ecc5 199-201
+  s_2b45b11a861944::t_6877b1a9206454 4,24-26,42-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "40d3e43b8ee5767f0236eb47420fcbcd6828863b",
+  "prompts": {},
+  "sessions": {
+    "s_2b45b11a861944": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8092400a-8090-42c4-baf7-ed730bec784c",
+        "model": "default"
+      },
+      "human_author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  }
+}
