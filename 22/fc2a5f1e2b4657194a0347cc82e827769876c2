@@ -1,0 +1,82 @@
+src/orchestrator/mod.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 12-13,25,67,124,130-135
+src/status.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 23-30,62-65,82-84,110,140-144,167-170
+src/drivers/markdown_table.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 148
+src/drivers/data.rs
+  s_2b45b11a861944::t_1e5f4954f09737 121,125
+  s_2b45b11a861944::t_71cf5e0506c8ef 130-135,168-174,197-202,252-254,287-293,323-326,366-370,377-380
+src/orchestrator/resolve.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 5,42
+src/content/tree.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 92-95,133-137,141
+src/sinks/gui/widgets/tree.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 13-18
+src/drivers/external.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 110,155
+src/drivers/image.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 40-42
+src/sinks/gui/widgets/image.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 20-22
+src/sinks/gui/widgets/source_editor.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 85-86
+src/drivers/highlight.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 42,87-88
+tests/integration_render.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 152-153,169
+src/drivers/office/document.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 96-98
+src/drivers/archive.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 85-89
+src/sinks/paginate.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 30-31,232
+  s_2b45b11a861944::t_aca700b5df284e 103-107
+src/drivers/database.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 34-35
+src/sinks/mod.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 2
+src/lib.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 134,150
+src/drivers/directory.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 74,108-112
+src/drivers/ebook.rs
+  s_2b45b11a861944::t_a1750fb9340daa 390
+  s_2b45b11a861944::t_71cf5e0506c8ef 17-18,447-448,461-462
+src/content/mod.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 69
+src/sinks/audio_playback.rs
+  s_2b45b11a861944::t_500a96966f7c37 28
+src/drivers/markdown.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 114-118,161-168,222-229,400,593-597,631-634,689-690,695,738
+src/orchestrator/registry.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 9
+src/drivers/media.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 125,134-139,208
+src/drivers/office/presentation.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 72-74
+src/sinks/gui/widgets/table.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 28
+src/drivers/fallback.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 40-43
+src/drivers/code.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 85-87,105-106,139-143
+src/sinks/gui/mod.rs
+  s_2b45b11a861944::t_71cf5e0506c8ef 13-16,133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "22fc2a5f1e2b4657194a0347cc82e827769876c2",
+  "prompts": {},
+  "sessions": {
+    "s_2b45b11a861944": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8092400a-8090-42c4-baf7-ed730bec784c",
+        "model": "default"
+      },
+      "human_author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  }
+}
