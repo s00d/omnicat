@@ -1,0 +1,21 @@
+tests/integration_render.rs
+  s_2b45b11a861944::t_6ae0d750758f5e 5-78,80,82-88,91-102,105-109,111-114,116-120,122-124,126-134,138,204-217
+.gitattributes
+  s_2b45b11a861944::t_afad933dbf1ba2 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "28f079f30d7122ee2035adebec0f3f1869ad087e",
+  "prompts": {},
+  "sessions": {
+    "s_2b45b11a861944": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8092400a-8090-42c4-baf7-ed730bec784c",
+        "model": "default"
+      },
+      "human_author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  }
+}
