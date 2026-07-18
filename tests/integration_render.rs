@@ -1,136 +1,141 @@
-use std::io::Read;
-use std::sync::mpsc;
-use std::thread;
-use std::time::{Duration, Instant};
-
-use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
-
 fn cargo_bin() -> std::path::PathBuf {
     assert_cmd::cargo::cargo_bin("omnicat")
 }
 
-fn run_pty(args: &[&str]) -> String {
-    let pty_system = NativePtySystem::default();
-    let pair = pty_system
-        .openpty(PtySize {
-            rows: 24,
-            cols: 80,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .unwrap();
+#[cfg(unix)]
+mod pty {
+    use std::io::Read;
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::{Duration, Instant};
 
-    let mut cmd = CommandBuilder::new(cargo_bin());
-    // Headless CI / non-interactive runners must not open GUI or block on audio.
-    cmd.env("OMNICAT_NO_GUI", "1");
-    cmd.env("OMNICAT_NO_PLAYBACK", "1");
-    for arg in args {
-        cmd.arg(arg);
-    }
+    use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 
-    let mut child = pair.slave.spawn_command(cmd).unwrap();
-    drop(pair.slave);
+    use super::cargo_bin;
 
-    let mut reader = pair.master.try_clone_reader().unwrap();
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let mut buf = String::new();
-        let _ = reader.read_to_string(&mut buf);
-        let _ = tx.send(buf);
-    });
+    pub fn run_pty(args: &[&str]) -> String {
+        let pty_system = NativePtySystem::default();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
 
-    let deadline = Instant::now() + Duration::from_secs(30);
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(50)),
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                break;
+        let mut cmd = CommandBuilder::new(cargo_bin());
+        // Headless CI / non-interactive runners must not open GUI or block on audio.
+        cmd.env("OMNICAT_NO_GUI", "1");
+        cmd.env("OMNICAT_NO_PLAYBACK", "1");
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        let mut child = pair.slave.spawn_command(cmd).unwrap();
+        drop(pair.slave);
+
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = reader.read_to_string(&mut buf);
+            let _ = tx.send(buf);
+        });
+
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(50)),
+                _ => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break;
+                }
             }
         }
+        rx.recv_timeout(Duration::from_secs(5)).unwrap_or_default()
     }
-    rx.recv_timeout(Duration::from_secs(5)).unwrap_or_default()
+
+    #[test]
+    fn tty_markdown_renders_with_ansi() {
+        let tmp = tempfile::NamedTempFile::with_suffix(".md").unwrap();
+        std::fs::write(tmp.path(), "# Title\n\nSENTINEL-MD-CONTENT\n").unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+
+        let out = run_pty(&[&path]);
+        assert!(out.contains("SENTINEL-MD-CONTENT"), "output: {out:?}");
+        assert!(out.contains("\x1b["), "expected ANSI styling in TTY output");
+    }
+
+    #[test]
+    fn tty_markdown_table_not_mashed() {
+        let tmp = tempfile::NamedTempFile::with_suffix(".md").unwrap();
+        std::fs::write(
+            tmp.path(),
+            "## CLI\n\n| Command | Description |\n|---------|-------------|\n| `omnicat` | Render TTY |\n",
+        )
+        .unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+
+        let out = run_pty(&[&path]);
+        assert!(
+            !out.contains("CommandDescription"),
+            "table cells should not mash together: {out:?}"
+        );
+        assert!(out.contains("Command"), "output: {out:?}");
+        assert!(out.contains("Description"), "output: {out:?}");
+    }
+
+    #[test]
+    fn native_shows_raw_content() {
+        let tmp = tempfile::NamedTempFile::with_suffix(".md").unwrap();
+        std::fs::write(tmp.path(), "# Title\n\nSENTINEL-MD-CONTENT\n").unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+
+        let out = run_pty(&["-native", &path]);
+        assert!(out.contains("SENTINEL-MD-CONTENT"), "output: {out:?}");
+        assert!(
+            !out.contains("\x1b[1;36m"),
+            "native should not apply markdown styling"
+        );
+    }
+
+    #[test]
+    fn py_uses_code_renderer() {
+        let tmp = tempfile::NamedTempFile::with_suffix(".py").unwrap();
+        std::fs::write(tmp.path(), "print(\"SENTINEL-PY\")\n").unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+
+        let out = run_pty(&[&path]);
+        assert!(out.contains("SENTINEL-PY"), "output: {out:?}");
+        assert!(out.contains("\x1b["));
+    }
+
+    #[test]
+    fn preview_headless_fallback_in_tty() {
+        let tmp = tempfile::NamedTempFile::with_suffix(".txt").unwrap();
+        std::fs::write(tmp.path(), "SENTINEL-PREVIEW-FALLBACK\n").unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+
+        std::env::set_var("OMNICAT_NO_GUI", "1");
+        let out = run_pty(&["--preview", &path]);
+        std::env::remove_var("OMNICAT_NO_GUI");
+
+        assert!(
+            out.contains("GUI preview unavailable"),
+            "expected fallback message in output: {out:?}"
+        );
+        assert!(
+            out.contains("SENTINEL-PREVIEW-FALLBACK"),
+            "expected terminal fallback content: {out:?}"
+        );
+    }
 }
 
 #[test]
-fn tty_markdown_renders_with_ansi() {
-    let tmp = tempfile::NamedTempFile::with_suffix(".md").unwrap();
-    std::fs::write(tmp.path(), "# Title\n\nSENTINEL-MD-CONTENT\n").unwrap();
-    let path = tmp.path().to_string_lossy().to_string();
-
-    let out = run_pty(&[&path]);
-    assert!(out.contains("SENTINEL-MD-CONTENT"), "output: {out:?}");
-    assert!(out.contains("\x1b["), "expected ANSI styling in TTY output");
-}
-
-#[test]
-fn tty_markdown_table_not_mashed() {
-    let tmp = tempfile::NamedTempFile::with_suffix(".md").unwrap();
-    std::fs::write(
-        tmp.path(),
-        "## CLI\n\n| Command | Description |\n|---------|-------------|\n| `omnicat` | Render TTY |\n",
-    )
-    .unwrap();
-    let path = tmp.path().to_string_lossy().to_string();
-
-    let out = run_pty(&[&path]);
-    assert!(
-        !out.contains("CommandDescription"),
-        "table cells should not mash together: {out:?}"
-    );
-    assert!(out.contains("Command"), "output: {out:?}");
-    assert!(out.contains("Description"), "output: {out:?}");
-}
-
-#[test]
-fn native_shows_raw_content() {
-    let tmp = tempfile::NamedTempFile::with_suffix(".md").unwrap();
-    std::fs::write(tmp.path(), "# Title\n\nSENTINEL-MD-CONTENT\n").unwrap();
-    let path = tmp.path().to_string_lossy().to_string();
-
-    let out = run_pty(&["-native", &path]);
-    assert!(out.contains("SENTINEL-MD-CONTENT"), "output: {out:?}");
-    assert!(
-        !out.contains("\x1b[1;36m"),
-        "native should not apply markdown styling"
-    );
-}
-
-#[test]
-fn py_uses_code_renderer() {
-    let tmp = tempfile::NamedTempFile::with_suffix(".py").unwrap();
-    std::fs::write(tmp.path(), "print(\"SENTINEL-PY\")\n").unwrap();
-    let path = tmp.path().to_string_lossy().to_string();
-
-    let out = run_pty(&[&path]);
-    assert!(out.contains("SENTINEL-PY"), "output: {out:?}");
-    assert!(out.contains("\x1b["));
-}
-
-#[test]
-fn preview_headless_fallback_in_tty() {
-    let tmp = tempfile::NamedTempFile::with_suffix(".txt").unwrap();
-    std::fs::write(tmp.path(), "SENTINEL-PREVIEW-FALLBACK\n").unwrap();
-    let path = tmp.path().to_string_lossy().to_string();
-
-    std::env::set_var("OMNICAT_NO_GUI", "1");
-    let out = run_pty(&["--preview", &path]);
-    std::env::remove_var("OMNICAT_NO_GUI");
-
-    assert!(
-        out.contains("GUI preview unavailable"),
-        "expected fallback message in output: {out:?}"
-    );
-    assert!(
-        out.contains("SENTINEL-PREVIEW-FALLBACK"),
-        "expected terminal fallback content: {out:?}"
-    );
-}
-
-#[test]
-fn demo_fixtures_build_and_render_in_pty() {
+fn demo_fixtures_build() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let demo = root.join("demo");
     let cfg = omnicat::config::OmnicatConfig::default();
@@ -196,16 +201,20 @@ fn demo_fixtures_build_and_render_in_pty() {
             path.display()
         );
 
-        // Images need a real terminal graphics protocol; audio playback can block
-        // indefinitely on headless runners without an output device.
-        if !matches!(*kind, "image" | "media") {
-            let path_str = path.to_string_lossy().to_string();
-            let out = run_pty(&[&path_str]);
-            assert!(
-                !out.contains("cat:"),
-                "should not passthrough to cat for {}: {out:?}",
-                path.display()
-            );
+        #[cfg(unix)]
+        {
+            // Images need a real terminal graphics protocol; audio playback can block
+            // indefinitely on headless runners without an output device.
+            // ConPTY on Windows CI often yields empty output, so PTY checks are Unix-only.
+            if !matches!(*kind, "image" | "media") {
+                let path_str = path.to_string_lossy().to_string();
+                let out = pty::run_pty(&[&path_str]);
+                assert!(
+                    !out.contains("cat:"),
+                    "should not passthrough to cat for {}: {out:?}",
+                    path.display()
+                );
+            }
         }
     }
 }

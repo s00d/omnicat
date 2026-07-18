@@ -1,0 +1,33 @@
+# Keep demo fixtures and other binaries byte-identical across platforms.
+# Without this, Windows core.autocrlf corrupts PDFs and similar assets.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.wav binary
+*.mp3 binary
+*.mp4 binary
+*.zip binary
+*.7z binary
+*.gz binary
+*.xz binary
+*.bz2 binary
+*.xlsx binary
+*.xls binary
+*.docx binary
+*.doc binary
+*.pptx binary
+*.ppt binary
+*.epub binary
+*.cbz binary
+*.mobi binary
+*.sqlite binary
+*.db binary
+*.bin binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+demo/files/** binary
