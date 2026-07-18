@@ -1,7 +1,7 @@
 use std::io::Read;
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 
@@ -21,6 +21,9 @@ fn run_pty(args: &[&str]) -> String {
         .unwrap();
 
     let mut cmd = CommandBuilder::new(cargo_bin());
+    // Headless CI / non-interactive runners must not open GUI or block on audio.
+    cmd.env("OMNICAT_NO_GUI", "1");
+    cmd.env("OMNICAT_NO_PLAYBACK", "1");
     for arg in args {
         cmd.arg(arg);
     }
@@ -36,7 +39,18 @@ fn run_pty(args: &[&str]) -> String {
         let _ = tx.send(buf);
     });
 
-    let _ = child.wait();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(50)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break;
+            }
+        }
+    }
     rx.recv_timeout(Duration::from_secs(5)).unwrap_or_default()
 }
 
@@ -182,7 +196,9 @@ fn demo_fixtures_build_and_render_in_pty() {
             path.display()
         );
 
-        if *kind != "image" {
+        // Images need a real terminal graphics protocol; audio playback can block
+        // indefinitely on headless runners without an output device.
+        if !matches!(*kind, "image" | "media") {
             let path_str = path.to_string_lossy().to_string();
             let out = run_pty(&[&path_str]);
             assert!(

@@ -35,7 +35,11 @@ impl MediaDriver {
 
         write_media_info(&info, out)?;
 
-        if config.terminal.media.playback && is_audio_ext(&ext) {
+        if config.terminal.media.playback
+            && is_audio_ext(&ext)
+            && std::env::var_os("OMNICAT_NO_PLAYBACK").is_none()
+            && std::env::var_os("CI").is_none()
+        {
             writeln!(out)?;
             match audio_playback::play_audio_with_progress(
                 path,
