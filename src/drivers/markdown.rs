@@ -315,7 +315,14 @@ impl<'a> MarkdownRenderer<'a> {
         self.in_code_block = false;
         let code = std::mem::take(&mut self.code_block_buf);
         let lang = std::mem::take(&mut self.code_block_lang);
-        render_fenced_code(self.out, &lang, &code, &self.code_theme, self.plain)?;
+        render_fenced_code(
+            self.out,
+            &lang,
+            &code,
+            &self.code_theme,
+            self.plain,
+            self.config.terminal.markdown.wrap_width,
+        )?;
         writeln!(self.out)?;
         Ok(())
     }
@@ -362,9 +369,15 @@ fn render_fenced_code(
     code: &str,
     theme_name: &str,
     plain: bool,
+    wrap_width: u16,
 ) -> Result<()> {
     writeln!(out)?;
     if code.trim().is_empty() {
+        return Ok(());
+    }
+
+    if lang.eq_ignore_ascii_case("mermaid") && try_render_mermaid(out, code, plain, wrap_width)? {
+        writeln!(out)?;
         return Ok(());
     }
 
@@ -402,6 +415,33 @@ fn render_fenced_code(
     }
     writeln!(out)?;
     Ok(())
+}
+
+fn try_render_mermaid(
+    out: &mut dyn Write,
+    code: &str,
+    plain: bool,
+    wrap_width: u16,
+) -> Result<bool> {
+    let width = if wrap_width == 0 {
+        None
+    } else {
+        Some(usize::from(wrap_width))
+    };
+    let diagram = if plain {
+        mermaid_text::render_ascii_with_width(code, width)
+    } else {
+        mermaid_text::render_with_width(code, width)
+    };
+    match diagram {
+        Ok(text) => {
+            for line in text.lines() {
+                writeln!(out, "  {line}")?;
+            }
+            Ok(true)
+        }
+        Err(_) => Ok(false),
+    }
 }
 
 fn heading_color(level: pulldown_cmark::HeadingLevel, theme: &str, plain: bool) -> String {
@@ -677,5 +717,54 @@ mod tests {
         assert!(!rendered.contains("CommandDescription"));
         assert!(rendered.contains("Command"));
         assert!(rendered.contains("Description"));
+    }
+
+    #[test]
+    fn mermaid_flowchart_renders_as_diagram() {
+        let rendered = render(
+            "```mermaid\ngraph LR\n    A[Build] --> B[Deploy]\n```\n",
+        );
+        assert!(
+            rendered.contains("Build") && rendered.contains("Deploy"),
+            "expected node labels in diagram: {rendered}"
+        );
+        // Diagram should not be just the raw Mermaid source line.
+        assert!(
+            !rendered.trim_start().starts_with("graph LR"),
+            "expected rendered diagram, got raw source: {rendered}"
+        );
+        // Unicode box-drawing or ASCII connectors from the renderer.
+        assert!(
+            rendered.contains('─')
+                || rendered.contains('│')
+                || rendered.contains('┌')
+                || rendered.contains('-')
+                || rendered.contains('|')
+                || rendered.contains('+'),
+            "expected diagram drawing chars: {rendered}"
+        );
+    }
+
+    #[test]
+    fn invalid_mermaid_falls_back_to_source() {
+        let rendered = render("```mermaid\nthis is not valid mermaid!!!@@@\n```\n");
+        assert!(
+            rendered.contains("this is not valid mermaid!!!@@@"),
+            "expected source fallback: {rendered}"
+        );
+    }
+
+    #[test]
+    fn non_mermaid_fenced_code_unchanged() {
+        let rendered = render("```rust\nfn main() {}\n```\n");
+        // Syntect inserts ANSI between tokens; check pieces rather than the raw phrase.
+        assert!(
+            rendered.contains("fn") && rendered.contains("main"),
+            "expected rust source: {rendered:?}"
+        );
+        assert!(
+            !rendered.contains("graph LR") && !rendered.contains("flowchart"),
+            "rust block must not go through mermaid: {rendered}"
+        );
     }
 }

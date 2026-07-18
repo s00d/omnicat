@@ -1,6 +1,6 @@
 [package]
 name = "omnicat"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 rust-version = "1.92"
 description = "Universal file preview for terminal and GUI — a context-aware cat"
@@ -65,6 +65,7 @@ zip = "8"
 bzip2 = "0.6"
 xz2 = "0.1"
 mobi = "0.8"
+mermaid-text = "0.56.1"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["process"] }
