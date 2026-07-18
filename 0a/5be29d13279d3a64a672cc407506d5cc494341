@@ -1,0 +1,30 @@
+Cargo.toml
+  s_1ad9de939ff16a::t_b84f90bc9d2f2c 3
+  s_1ad9de939ff16a::t_5af29b90b1301e 68
+README.md
+  s_1ad9de939ff16a::t_cbed82a52bfa6d 1
+Formula/omnicat.rb
+  s_1ad9de939ff16a::t_aeea30679189ab 7
+src/drivers/markdown.rs
+  s_1ad9de939ff16a::t_aa9cccb9549800 372,379-383,420-444
+  s_1ad9de939ff16a::t_86f80b5a59ce14 318-325
+  s_1ad9de939ff16a::t_6b06ccb858eb3a 721-759,761,764-765,767-769
+  s_1ad9de939ff16a::t_4978f51dd9201c 760,762-763,766
+  s_1ad9de939ff16a::t_31a86fbfccbdd1 445-446
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "0a5be29d13279d3a64a672cc407506d5cc494341",
+  "prompts": {},
+  "sessions": {
+    "s_1ad9de939ff16a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4ec06db8-6be2-47bf-8a59-8fddc5aa0761",
+        "model": "default"
+      },
+      "human_author": "Pavel Kuzmin <Virus191288@gmail.com>"
+    }
+  }
+}
