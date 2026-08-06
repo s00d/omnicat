@@ -102,6 +102,41 @@ fn preview_headless_returns_false() {
 }
 
 #[test]
+fn edit_help_is_listed() {
+    omnicat()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("omnicat edit"));
+}
+
+#[cfg(unix)]
+#[test]
+fn edit_launches_editor_with_file() {
+    // `true` exists on PATH, ignores its arguments, and exits 0 — a safe stand-in
+    // for a real editor that proves resolution + launch + wait works end to end.
+    let tmp = tempfile::NamedTempFile::with_suffix(".txt").unwrap();
+    std::fs::write(tmp.path(), "hello\n").unwrap();
+    omnicat()
+        .args(["edit", "--with", "true"])
+        .arg(tmp.path())
+        .assert()
+        .success();
+}
+
+#[test]
+fn edit_unknown_editor_errors() {
+    let tmp = tempfile::NamedTempFile::with_suffix(".txt").unwrap();
+    std::fs::write(tmp.path(), "hello\n").unwrap();
+    omnicat()
+        .args(["edit", "--with", "definitely-not-a-real-editor-xyz"])
+        .arg(tmp.path())
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("not found"));
+}
+
+#[test]
 fn native_flag_still_in_help() {
     omnicat()
         .arg("--help")

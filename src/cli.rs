@@ -9,10 +9,21 @@ pub struct FileOptions {
 pub enum Command {
     Version,
     Help,
-    Init { shell: String },
+    Init {
+        shell: String,
+    },
     Status,
-    Native { args: Vec<String> },
-    File { path: String, options: FileOptions },
+    Native {
+        args: Vec<String>,
+    },
+    File {
+        path: String,
+        options: FileOptions,
+    },
+    Edit {
+        file: String,
+        editor: Option<String>,
+    },
 }
 
 pub struct Cli {
@@ -28,6 +39,9 @@ Usage:
   omnicat --preview <file>    Open a native preview window (if GUI available)
   omnicat --preview-only <file>  Preview window only, no terminal output
   omnicat --paginate <file>      Interactive pager for long terminal output
+  omnicat edit <file>            Open in an editor (auto-detected)
+  omnicat edit <editor> <file>   Open in a specific editor, e.g. `edit subl x.txt`
+  omnicat edit <file> --with code  Same, choosing the editor explicitly
   omnicat -native ...           Force the vanilla cat
 
 Pager keys (--paginate, long output on a TTY):
@@ -83,7 +97,55 @@ Configuration:
                     args: args[2..].to_vec(),
                 },
             },
+            "edit" | "open" => Self::parse_edit_command(&args[2..]),
             _ => Self::parse_file_command(&args[1..]),
+        }
+    }
+
+    fn parse_edit_command(args: &[String]) -> Self {
+        let mut editor: Option<String> = None;
+        let mut positionals: Vec<String> = Vec::new();
+
+        let mut i = 0;
+        while i < args.len() {
+            let arg = &args[i];
+            if arg == "-w" || arg == "--with" {
+                match args.get(i + 1) {
+                    Some(value) => {
+                        editor = Some(value.clone());
+                        i += 2;
+                    }
+                    None => return Self::help(),
+                }
+            } else if let Some(value) = arg.strip_prefix("--with=") {
+                editor = Some(value.to_string());
+                i += 1;
+            } else if arg.len() > 1 && arg.starts_with('-') {
+                return Self::help();
+            } else {
+                positionals.push(arg.clone());
+                i += 1;
+            }
+        }
+
+        let (editor, file) = match (editor, positionals.len()) {
+            // `edit <file> --with EDITOR`
+            (Some(editor), 1) => (Some(editor), positionals[0].clone()),
+            // `edit <file>` — auto-detect the editor
+            (None, 1) => (None, positionals[0].clone()),
+            // `edit <editor> <file>`
+            (None, 2) => (Some(positionals[0].clone()), positionals[1].clone()),
+            _ => return Self::help(),
+        };
+
+        Self {
+            command: Command::Edit { file, editor },
+        }
+    }
+
+    fn help() -> Self {
+        Self {
+            command: Command::Help,
         }
     }
 
@@ -156,6 +218,52 @@ mod tests {
             Command::File { options, .. } => assert!(options.paginate),
             _ => panic!("expected file command"),
         }
+    }
+
+    fn parse_edit(args: &[&str]) -> Command {
+        Cli::parse_edit_command(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>()).command
+    }
+
+    #[test]
+    fn edit_single_file_auto_detects() {
+        match parse_edit(&["./text.txt"]) {
+            Command::Edit { file, editor } => {
+                assert_eq!(file, "./text.txt");
+                assert!(editor.is_none());
+            }
+            other => panic!("expected edit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn edit_positional_editor_then_file() {
+        match parse_edit(&["subl", "./text.txt"]) {
+            Command::Edit { file, editor } => {
+                assert_eq!(file, "./text.txt");
+                assert_eq!(editor.as_deref(), Some("subl"));
+            }
+            other => panic!("expected edit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn edit_with_flag_selects_editor() {
+        match parse_edit(&["./text.txt", "--with", "code"]) {
+            Command::Edit { file, editor } => {
+                assert_eq!(file, "./text.txt");
+                assert_eq!(editor.as_deref(), Some("code"));
+            }
+            other => panic!("expected edit, got {other:?}"),
+        }
+        match parse_edit(&["-w", "code", "./text.txt"]) {
+            Command::Edit { editor, .. } => assert_eq!(editor.as_deref(), Some("code")),
+            other => panic!("expected edit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn edit_without_args_is_help() {
+        assert!(matches!(parse_edit(&[]), Command::Help));
     }
 
     fn parse_args(args: &[&str]) -> Cli {

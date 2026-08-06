@@ -3,6 +3,7 @@ pub mod config;
 pub mod content;
 pub mod detect;
 pub mod drivers;
+pub mod editor;
 pub mod gate;
 pub mod init;
 pub mod orchestrator;
@@ -51,6 +52,9 @@ pub fn run() -> Result<()> {
         }
         Command::File { path, options } => {
             handle_file(&path, &options)?;
+        }
+        Command::Edit { file, editor } => {
+            editor::open(Path::new(&file), editor.as_deref())?;
         }
     }
 

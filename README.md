@@ -179,6 +179,8 @@ Remove the `eval "$(omnicat init …)"` line from your shell config and reload. 
 | Folder tree | `cat <directory>/` |
 | GUI preview | `omnicat --preview <path>` |
 | GUI only (no terminal output) | `omnicat --preview-only <path>` |
+| Open in an editor | `omnicat edit <file>` (auto-detect) |
+| Open in a specific editor | `omnicat edit <editor> <file>` or `omnicat edit <file> --with <editor>` |
 | Force plain `cat` | `cat -native <file> …` or `omnicat -native …` |
 | Page long output | `omnicat --paginate <file>` |
 | Check what works on your system | `cat -status` or `omnicat -status` |
@@ -206,6 +208,24 @@ Add `--preview` to open a native window (spreadsheets, images, slides, source wi
 - Works when a display is available (local desktop).
 - On SSH or CI without a display: message on stderr, then terminal fallback.
 - Disable GUI attempts: `OMNICAT_NO_GUI=1`.
+
+## Open in an editor
+
+Jump straight from a preview to editing the file in your editor of choice:
+
+```bash
+omnicat edit notes.md              # auto-detect an editor
+omnicat edit subl notes.md         # pick one by name
+omnicat edit notes.md --with code  # ...or with the --with flag
+```
+
+Editor selection is lightweight and predictable — no config, no system scanning beyond a quick `PATH` lookup:
+
+1. an editor you name (`edit <editor> <file>` or `--with <editor>`),
+2. then `$VISUAL`, then `$EDITOR`,
+3. then the first known editor found on your `PATH` (`nvim`, `vim`, `hx`, `micro`, `nano`, `vi`, `code`, `subl`, `zed`, `emacs`, `gedit`, `kate`, `mate`).
+
+Friendly names are accepted (`sublime` → `subl`, `vscode` → `code`, `neovim` → `nvim`, `helix` → `hx`), and values may include flags (`--with "code --wait"`). `omnicat open` is an alias for `omnicat edit`.
 
 ## Supported file types
 
