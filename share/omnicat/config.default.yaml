@@ -6,7 +6,9 @@ terminal:
     link_color: blue
   code:
     line_numbers: true
-    theme: base16-ocean.dark
+    # "auto" adapts to a light or dark terminal; also accepts "light"/"dark" or a
+    # syntect theme name (e.g. base16-ocean.dark, InspiredGitHub).
+    theme: auto
     style: numbers
     tab_width: 4
   data:

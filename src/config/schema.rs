@@ -305,7 +305,7 @@ fn default_true() -> bool {
     true
 }
 fn default_code_theme() -> String {
-    "base16-ocean.dark".into()
+    "auto".into()
 }
 fn default_code_style() -> String {
     "numbers".into()

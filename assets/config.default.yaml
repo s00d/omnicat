@@ -6,7 +6,10 @@ terminal:
     link_color: blue
   code:
     line_numbers: true
-    theme: base16-ocean.dark
+    # Syntax-highlighting theme. "auto" detects the terminal background (via OSC 11
+    # query, then COLORFGBG) and picks a readable theme; use "light"/"dark" to force
+    # one, or any syntect theme name (e.g. base16-ocean.dark, InspiredGitHub).
+    theme: auto
     style: numbers
     tab_width: 4
   data:

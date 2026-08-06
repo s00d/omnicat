@@ -118,7 +118,12 @@ fn print_terminal_settings(cfg: &OmnicatConfig) {
     let mut buf = String::new();
     let _ = writeln!(buf, "  markdown.wrap_width: {}", t.markdown.wrap_width);
     let _ = writeln!(buf, "  code.line_numbers: {}", t.code.line_numbers);
-    let _ = writeln!(buf, "  code.theme: {}", t.code.theme);
+    let effective = crate::drivers::theme::resolve_theme_name(&t.code.theme);
+    if effective == t.code.theme {
+        let _ = writeln!(buf, "  code.theme: {}", t.code.theme);
+    } else {
+        let _ = writeln!(buf, "  code.theme: {} (-> {})", t.code.theme, effective);
+    }
     let _ = writeln!(buf, "  data.pretty: {}", t.data.pretty);
     let _ = writeln!(buf, "  image.protocol: {}", t.image.protocol);
     let _ = writeln!(buf, "  fallback.hex_cols: {}", t.fallback.hex_cols);

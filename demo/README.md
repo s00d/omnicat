@@ -8,7 +8,7 @@ Sample files for manual testing of terminal preview and `--preview` GUI.
 
 Shows markdown, code, CSV table, directory tree, hex fallback, and `--status`.
 
-Tape uses `echo` for section labels (bare `#` lines are shell comments in zsh). Terminal code theme defaults to `base16-ocean.dark` for readable colors on dark backgrounds.
+Tape uses `echo` for section labels (bare `#` lines are shell comments in zsh). Terminal code theme defaults to `auto`, which detects the terminal background and picks a readable theme (dark or light).
 
 Re-record (requires [VHS](https://github.com/charmbracelet/vhs)):
 

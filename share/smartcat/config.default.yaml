@@ -4,7 +4,9 @@ display:
     wrap_width: 80
   code:
     line_numbers: true
-    theme: InspiredGitHub
+    # "auto" adapts to a light or dark terminal; also accepts "light"/"dark" or a
+    # syntect theme name (e.g. base16-ocean.dark, InspiredGitHub).
+    theme: auto
     style: numbers
   data:
     pretty: true

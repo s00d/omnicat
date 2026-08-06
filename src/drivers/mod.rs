@@ -25,7 +25,7 @@ pub mod notebook;
 pub mod office;
 pub mod pdf;
 pub mod plist;
-mod theme;
+pub mod theme;
 
 pub trait PreviewDriver: Send + Sync {
     fn kind(&self) -> HandlerKind;

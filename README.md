@@ -238,8 +238,18 @@ Optional YAML — pick the first file that exists:
 
 Tune terminal themes, pager size, archive depth, GUI window size, document limits, and external command chains. See `assets/config.default.yaml` for all options.
 
+### Terminal color theme
+
+Syntax highlighting adapts to your terminal background. The `terminal.code.theme` option accepts:
+
+- `auto` (default) — detect the background (OSC 11 query, then the `COLORFGBG` variable) and pick a readable theme: a dark theme on dark terminals, a light one on light terminals.
+- `light` / `dark` — force a high-contrast theme for that background.
+- any [syntect](https://github.com/trishume/syntect) theme name, e.g. `base16-ocean.dark`, `InspiredGitHub`, `Solarized (light)`.
+
+Override detection without editing config via `OMNICAT_THEME=light` or `OMNICAT_THEME=dark`.
+
 ```bash
-omnicat -status    # show active settings and which handlers are available
+omnicat -status    # show active settings (including the resolved code theme) and which handlers are available
 ```
 
 ## Platforms
