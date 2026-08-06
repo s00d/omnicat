@@ -211,20 +211,26 @@ Add `--preview` to open a native window (spreadsheets, images, slides, source wi
 
 Built-in previews (no extra installs):
 
-| Category | Examples |
-|----------|----------|
-| Text & markup | `.md`, `.txt`, `.rtf`, `.org` |
-| Code | `.rs`, `.py`, `.js`, `.go`, `.sh`, `.sql`, … |
-| Data | `.json`, `.yaml`, `.toml`, `.csv`, `.tsv`, `.parquet`, `.feather`, `.msgpack` |
-| Documents | `.pdf`, `.docx`, `.odt`, `.epub`, `.mobi`, `.azw3`, `.fb2`, `.cbz` |
-| Spreadsheets | `.xlsx`, `.xls`, `.ods` |
-| Presentations | `.pptx`, `.odp` |
-| Archives | `.zip`, `.tar`, `.gz`, `.7z`, `.bz2`, `.xz`, … |
-| Media | `.mp3`, `.wav`, `.mp4`, `.mkv`, … (metadata; audio may play in terminal) |
-| Images | `.png`, `.jpg`, `.gif`, `.webp`, `.svg`, … |
-| Other | `.eml`, `.ipynb`, `.plist`, `.sqlite`, `.ttf`, `.ini`, directories |
+| Category | Extensions |
+|----------|------------|
+| Markdown | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn` |
+| Code | `.rs`, `.py`, `.js`, `.ts`, `.tsx`, `.jsx`, `.sh`, `.zsh`, `.bash`, `.rb`, `.go`, `.c`, `.h`, `.cpp`, `.hpp`, `.java`, `.kt`, `.swift`, `.lua`, `.sql`, `.html`, `.css`, `.scss`, `.vue`, `.php`, `.pl`, `.r`, `.xml`, `.svg` |
+| Data | `.json`, `.yaml`, `.yml`, `.toml`, `.ini`, `.csv`, `.tsv`, `.parquet`, `.feather`, `.msgpack` |
+| Documents | `.pdf`, `.docx`, `.odt`, `.rtf`, `.doc` |
+| Ebooks | `.epub`, `.mobi`, `.azw`, `.azw1`, `.azw2`, `.azw3`, `.prc`, `.pdb`, `.fb2`, `.fbz`, `.lit`, `.djvu`, `.djv`, `.cbz`, `.cbr`, `.opf` |
+| Spreadsheets | `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods` |
+| Presentations | `.pptx`, `.ppt`, `.odp` |
+| Archives | `.zip`, `.tar`, `.tgz`, `.gz`, `.bz2`, `.xz`, `.7z` |
+| Media | `.mp3`, `.wav`, `.flac`, `.ogg`, `.oga`, `.opus`, `.m4a`, `.aac`, `.aiff`, `.aif`, `.wma`, `.wv`, `.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.m4v` (metadata; audio may play in terminal) |
+| Images | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.ico` |
+| Fonts | `.ttf`, `.otf`, `.woff`, `.woff2` |
+| Databases | `.sqlite`, `.sqlite3`, `.db` |
+| Email | `.eml` |
+| Notebooks | `.ipynb` |
+| Property lists | `.plist` |
+| Directories | any folder (rendered as a file tree) |
 
-Unknown binary files fall back to a hex dump.
+Any other UTF‑8 text file (for example `.txt`, `.log`, `.org`) is shown as-is; unknown binary files fall back to a hex dump.
 
 You can plug in external tools (glow, bat, jupytext, imgcat, …) via the `handlers` section in config; they run first when installed, then built-in renderers take over.
 
