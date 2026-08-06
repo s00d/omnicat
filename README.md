@@ -214,15 +214,15 @@ Built-in previews (no extra installs):
 | Category | Extensions |
 |----------|------------|
 | Markdown | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn` |
-| Code | `.rs`, `.py`, `.js`, `.ts`, `.tsx`, `.jsx`, `.sh`, `.zsh`, `.bash`, `.rb`, `.go`, `.c`, `.h`, `.cpp`, `.hpp`, `.java`, `.kt`, `.swift`, `.lua`, `.sql`, `.html`, `.css`, `.scss`, `.vue`, `.php`, `.pl`, `.r`, `.xml`, `.svg` |
-| Data | `.json`, `.yaml`, `.yml`, `.toml`, `.ini`, `.csv`, `.tsv`, `.parquet`, `.feather`, `.msgpack` |
+| Code | `.rs`, `.py`, `.js`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.jsx`, `.sh`, `.zsh`, `.bash`, `.fish`, `.rb`, `.go`, `.c`, `.h`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.cs`, `.java`, `.kt`, `.kts`, `.scala`, `.groovy`, `.gradle`, `.swift`, `.dart`, `.lua`, `.sql`, `.html`, `.htm`, `.xhtml`, `.css`, `.scss`, `.sass`, `.less`, `.styl`, `.vue`, `.svelte`, `.php`, `.pl`, `.pm`, `.r`, `.xml`, `.svg`, `.hs`, `.clj`, `.cljs`, `.cljc`, `.edn`, `.ex`, `.exs`, `.erl`, `.jl`, `.nim`, `.zig`, `.ml`, `.mli`, `.fs`, `.fsx`, `.ps1`, `.bat`, `.cmd`, `.diff`, `.patch`, `.tex`, `.latex`, `.proto`, `.graphql`, `.gql`, `.sol`, `.m`, `.mm`, `.cmake`, `.coffee`, `.vim`, `.asm`, `.s` |
+| Data & config | `.json`, `.jsonl`, `.ndjson`, `.yaml`, `.yml`, `.toml`, `.ini`, `.conf`, `.cfg`, `.properties`, `.env`, `.csv`, `.tsv`, `.parquet`, `.feather`, `.msgpack` |
 | Documents | `.pdf`, `.docx`, `.odt`, `.rtf`, `.doc` |
 | Ebooks | `.epub`, `.mobi`, `.azw`, `.azw1`, `.azw2`, `.azw3`, `.prc`, `.pdb`, `.fb2`, `.fbz`, `.lit`, `.djvu`, `.djv`, `.cbz`, `.cbr`, `.opf` |
 | Spreadsheets | `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods` |
 | Presentations | `.pptx`, `.ppt`, `.odp` |
-| Archives | `.zip`, `.tar`, `.tgz`, `.gz`, `.bz2`, `.xz`, `.7z` |
+| Archives | `.zip`, `.jar`, `.war`, `.ear`, `.apk`, `.ipa`, `.xpi`, `.whl`, `.nupkg`, `.tar`, `.tgz`, `.gz`, `.bz2`, `.xz`, `.7z` |
 | Media | `.mp3`, `.wav`, `.flac`, `.ogg`, `.oga`, `.opus`, `.m4a`, `.aac`, `.aiff`, `.aif`, `.wma`, `.wv`, `.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.m4v` (metadata; audio may play in terminal) |
-| Images | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.ico` |
+| Images | `.png`, `.apng`, `.jpg`, `.jpeg`, `.jfif`, `.jpe`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.tif`, `.heic`, `.ico`, `.tga`, `.qoi`, `.pnm`, `.pbm`, `.pgm`, `.ppm` |
 | Fonts | `.ttf`, `.otf`, `.woff`, `.woff2` |
 | Databases | `.sqlite`, `.sqlite3`, `.db` |
 | Email | `.eml` |
@@ -230,7 +230,7 @@ Built-in previews (no extra installs):
 | Property lists | `.plist` |
 | Directories | any folder (rendered as a file tree) |
 
-Any other UTF‑8 text file (for example `.txt`, `.log`, `.org`) is shown as-is; unknown binary files fall back to a hex dump.
+Any other file is handled by a smart fallback: UTF‑8 text (for example `.txt`, `.log`, `.env`, `.org`) is shown as text, and its content is sniffed so JSON/XML/HTML/YAML/INI‑style files are syntax‑highlighted even without a known extension. Binary files that can't be identified lead with a metadata header (path, size, detected MIME) followed by a hex dump.
 
 You can plug in external tools (glow, bat, jupytext, imgcat, …) via the `handlers` section in config; they run first when installed, then built-in renderers take over.
 

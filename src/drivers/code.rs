@@ -82,9 +82,13 @@ impl PreviewDriver for CodeDriver {
 
     fn extensions(&self) -> &'static [&'static str] {
         &[
-            "py", "js", "ts", "tsx", "jsx", "sh", "zsh", "bash", "rb", "go", "rs", "c", "h", "cpp",
-            "hpp", "java", "kt", "swift", "lua", "sql", "html", "css", "scss", "vue", "php", "pl",
-            "r", "xml", "svg",
+            "py", "js", "mjs", "cjs", "ts", "tsx", "jsx", "sh", "zsh", "bash", "fish", "rb", "go",
+            "rs", "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "cs", "java", "kt", "kts", "scala",
+            "groovy", "gradle", "swift", "dart", "lua", "sql", "html", "htm", "xhtml", "css",
+            "scss", "sass", "less", "styl", "vue", "svelte", "php", "pl", "pm", "r", "xml", "svg",
+            "hs", "clj", "cljs", "cljc", "edn", "ex", "exs", "erl", "jl", "nim", "zig", "ml",
+            "mli", "fs", "fsx", "ps1", "bat", "cmd", "diff", "patch", "tex", "latex", "proto",
+            "graphql", "gql", "sol", "m", "mm", "cmake", "coffee", "vim", "asm", "s",
         ]
     }
 

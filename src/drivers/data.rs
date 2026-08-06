@@ -47,7 +47,22 @@ impl PreviewDriver for DataDriver {
 
     fn extensions(&self) -> &'static [&'static str] {
         &[
-            "csv", "tsv", "json", "yaml", "yml", "toml", "ini", "parquet", "feather", "msgpack",
+            "csv",
+            "tsv",
+            "json",
+            "jsonl",
+            "ndjson",
+            "yaml",
+            "yml",
+            "toml",
+            "ini",
+            "conf",
+            "cfg",
+            "properties",
+            "env",
+            "parquet",
+            "feather",
+            "msgpack",
         ]
     }
 
@@ -206,10 +221,10 @@ fn highlight_data(
     }
 
     let syntax_name = match ext {
-        "json" => "JSON",
+        "json" | "jsonl" | "ndjson" => "JSON",
         "yaml" | "yml" => "YAML",
         "toml" => "TOML",
-        "ini" => "INI",
+        "ini" | "conf" | "cfg" | "properties" | "env" => "INI",
         _ => "Plain Text",
     };
 

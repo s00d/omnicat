@@ -21,7 +21,10 @@ impl PreviewDriver for ArchiveDriver {
     }
 
     fn extensions(&self) -> &'static [&'static str] {
-        &["zip", "tar", "tgz", "gz", "bz2", "xz", "7z"]
+        &[
+            "zip", "jar", "war", "ear", "apk", "ipa", "xpi", "whl", "nupkg", "tar", "tgz", "gz",
+            "bz2", "xz", "7z",
+        ]
     }
 
     fn mime_patterns(&self) -> &'static [&'static str] {
@@ -53,7 +56,10 @@ fn build_archive_tree(path: &Path, config: &OmnicatConfig) -> Result<FileTree> {
     let max = config.terminal.archive.max_entries;
     let title = Some(format!("Archive: {}", path.display()));
 
-    let entries: Vec<ArchiveEntry> = if ext == "zip" {
+    let entries: Vec<ArchiveEntry> = if matches!(
+        ext.as_str(),
+        "zip" | "jar" | "war" | "ear" | "apk" | "ipa" | "xpi" | "whl" | "nupkg"
+    ) {
         collect_zip(path)?
     } else if ext == "7z" {
         collect_7z(path)?

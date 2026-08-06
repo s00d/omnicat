@@ -38,7 +38,8 @@ impl PreviewDriver for ImageDriver {
 
     fn extensions(&self) -> &'static [&'static str] {
         &[
-            "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "heic", "ico",
+            "png", "apng", "jpg", "jpeg", "jfif", "jpe", "gif", "webp", "bmp", "tiff", "tif",
+            "heic", "ico", "tga", "qoi", "pnm", "pbm", "pgm", "ppm",
         ]
     }
 
