@@ -66,6 +66,7 @@ bzip2 = "0.6"
 xz2 = "0.1"
 mobi = "0.8"
 mermaid-text = "0.56.1"
+edit = { version = "0.1.5", features = ["quoted-env"] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["process"] }

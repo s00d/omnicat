@@ -39,7 +39,8 @@ Usage:
   omnicat --preview <file>    Open a native preview window (if GUI available)
   omnicat --preview-only <file>  Preview window only, no terminal output
   omnicat --paginate <file>      Interactive pager for long terminal output
-  omnicat edit <file>            Open in an editor (auto-detected)
+  omnicat open <file>            Open in your default editor ($VISUAL/$EDITOR)
+  omnicat edit <file>            Same as open (default editor)
   omnicat edit <editor> <file>   Open in a specific editor, e.g. `edit subl x.txt`
   omnicat edit <file> --with code  Same, choosing the editor explicitly
   omnicat -native ...           Force the vanilla cat
@@ -97,7 +98,8 @@ Configuration:
                     args: args[2..].to_vec(),
                 },
             },
-            "edit" | "open" => Self::parse_edit_command(&args[2..]),
+            "edit" => Self::parse_edit_command(&args[2..]),
+            "open" => Self::parse_open_command(&args[2..]),
             _ => Self::parse_file_command(&args[1..]),
         }
     }
@@ -140,6 +142,19 @@ Configuration:
 
         Self {
             command: Command::Edit { file, editor },
+        }
+    }
+
+    /// `omnicat open <file>` — open in the default editor (no editor to name).
+    fn parse_open_command(args: &[String]) -> Self {
+        match args {
+            [file] if !file.starts_with('-') => Self {
+                command: Command::Edit {
+                    file: file.clone(),
+                    editor: None,
+                },
+            },
+            _ => Self::help(),
         }
     }
 
@@ -264,6 +279,22 @@ mod tests {
     #[test]
     fn edit_without_args_is_help() {
         assert!(matches!(parse_edit(&[]), Command::Help));
+    }
+
+    #[test]
+    fn open_uses_default_editor() {
+        let cmd = Cli::parse_open_command(&["./text.txt".to_string()]).command;
+        match cmd {
+            Command::Edit { file, editor } => {
+                assert_eq!(file, "./text.txt");
+                assert!(editor.is_none());
+            }
+            other => panic!("expected edit, got {other:?}"),
+        }
+        assert!(matches!(
+            Cli::parse_open_command(&[]).command,
+            Command::Help
+        ));
     }
 
     fn parse_args(args: &[&str]) -> Cli {

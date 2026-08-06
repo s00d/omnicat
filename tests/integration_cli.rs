@@ -124,6 +124,36 @@ fn edit_launches_editor_with_file() {
         .success();
 }
 
+#[cfg(unix)]
+#[test]
+fn edit_default_editor_uses_env() {
+    // The default-editor path is delegated to the `edit` crate, which honours
+    // $EDITOR. `true` ignores its args and exits 0, proving the path works.
+    let tmp = tempfile::NamedTempFile::with_suffix(".txt").unwrap();
+    std::fs::write(tmp.path(), "hello\n").unwrap();
+    omnicat()
+        .env("EDITOR", "true")
+        .env_remove("VISUAL")
+        .arg("edit")
+        .arg(tmp.path())
+        .assert()
+        .success();
+}
+
+#[cfg(unix)]
+#[test]
+fn open_uses_default_editor() {
+    let tmp = tempfile::NamedTempFile::with_suffix(".txt").unwrap();
+    std::fs::write(tmp.path(), "hello\n").unwrap();
+    omnicat()
+        .env("EDITOR", "true")
+        .env_remove("VISUAL")
+        .arg("open")
+        .arg(tmp.path())
+        .assert()
+        .success();
+}
+
 #[test]
 fn edit_unknown_editor_errors() {
     let tmp = tempfile::NamedTempFile::with_suffix(".txt").unwrap();

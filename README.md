@@ -211,21 +211,17 @@ Add `--preview` to open a native window (spreadsheets, images, slides, source wi
 
 ## Open in an editor
 
-Jump straight from a preview to editing the file in your editor of choice:
+Jump straight from a preview to editing the file:
 
 ```bash
-omnicat edit notes.md              # auto-detect an editor
+omnicat open notes.md              # open in your default editor
+omnicat edit notes.md              # same — default editor
 omnicat edit subl notes.md         # pick one by name
 omnicat edit notes.md --with code  # ...or with the --with flag
 ```
 
-Editor selection is lightweight and predictable — no config, no system scanning beyond a quick `PATH` lookup:
-
-1. an editor you name (`edit <editor> <file>` or `--with <editor>`),
-2. then `$VISUAL`, then `$EDITOR`,
-3. then the first known editor found on your `PATH` (`nvim`, `vim`, `hx`, `micro`, `nano`, `vi`, `code`, `subl`, `zed`, `emacs`, `gedit`, `kate`, `mate`).
-
-Friendly names are accepted (`sublime` → `subl`, `vscode` → `code`, `neovim` → `nvim`, `helix` → `hx`), and values may include flags (`--with "code --wait"`). `omnicat open` is an alias for `omnicat edit`.
+- `omnicat open <file>` and plain `omnicat edit <file>` open your **default editor**. This is powered by the cross‑platform [`edit`](https://crates.io/crates/edit) crate: it honours `$VISUAL`/`$EDITOR` and knows sensible platform fallbacks (e.g. Notepad on Windows) when neither is set.
+- `omnicat edit <editor> <file>` (or `--with <editor>`) opens a **specific** editor. Friendly names are accepted (`sublime` → `subl`, `vscode` → `code`, `neovim` → `nvim`, `helix` → `hx`), and values may include flags (`--with "code --wait"`). The named program is located with a quick `PATH` lookup, so a missing editor gives a clear error.
 
 ## Supported file types
 
