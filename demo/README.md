@@ -6,7 +6,7 @@ Sample files for manual testing of terminal preview and `--preview` GUI.
 
 ![omnicat terminal demo](omnicat-demo.gif)
 
-Shows markdown, code, CSV table, directory tree, hex fallback, and `--status`.
+Shows markdown, code, CSV, `db --query`, `log --stats`, directory tree, and `--status`. Commands are recorded hidden so the GIF focuses on output.
 
 Tape uses `echo` for section labels (bare `#` lines are shell comments in zsh). Terminal code theme defaults to `auto`, which detects the terminal background and picks a readable theme (dark or light).
 
@@ -23,7 +23,7 @@ vhs demo/omnicat-demo.tape
 Text fixtures are committed as-is. Office archives, images, SQLite, etc. are produced by:
 
 ```bash
-chmod +x demo/generate.sh demo/smoke.sh
+chmod +x demo/generate.sh demo/smoke.sh demo/smoke-log-db.sh
 ./demo/generate.sh
 ```
 
@@ -33,6 +33,7 @@ Verify fixtures:
 
 ```bash
 ./demo/smoke.sh
+./demo/smoke-log-db.sh          # omnicat log + db formats
 SMOKE_RENDER=1 ./demo/smoke.sh   # also runs cargo test demo_fixtures
 ```
 
@@ -78,5 +79,43 @@ done
 | plist | `files/sample.plist` | |
 | fallback (text) | `files/sample.txt` | UTF-8 → source editor |
 | fallback (hex) | `files/sample.bin` | binary dump |
+
+## Log analysis (`omnicat log`)
+
+Fixtures under `demo/log/` — one sample per auto-detected format:
+
+| Format | File |
+|--------|------|
+| JSON | `log/json.log` |
+| logfmt | `log/logfmt.log` |
+| nginx access | `log/nginx.log` |
+| tracing | `log/tracing.log` |
+| plain text | `log/text.log` |
+
+After `./demo/generate.sh`: compressed `json.log.gz`, `.zst`, `.bz2`, `.xz`.
+
+```bash
+omnicat log demo/log/json.log --stats
+omnicat log demo/log/json.log.gz --errors
+omnicat log demo/log/nginx.log --http
+./demo/smoke-log-db.sh
+```
+
+## Database inspector (`omnicat db`)
+
+Fixtures under `demo/db/`:
+
+| Kind | Path |
+|------|------|
+| MySQL dump | `db/sample.sql`, `db/sample.sql.gz`, `db/sample.sql.zst` |
+| Redis RDB | `db/sample.rdb` |
+| Redis AOF | `db/sample.aof`, `db/redis-aof-dir/` |
+| MySQL datadir | `db/mysql-datadir/` |
+
+```bash
+omnicat db demo/db/sample.sql --query 'SELECT * FROM users LIMIT 3'
+omnicat db demo/db/sample.rdb --stats
+./demo/smoke-log-db.sh
+```
 
 Legacy `.doc` / `.xls` / `.ppt` need real Microsoft Office binaries for useful output; the included `.doc` is a minimal OLE container for detection only.

@@ -1,0 +1,3 @@
+2026-08-06 10:04:01 INFO  scheduler started
+2026-08-06 10:04:02 WARN  queue depth high: 128
+2026-08-06 10:04:03 ERROR disk full on /var/log

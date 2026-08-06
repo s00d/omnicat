@@ -1,9 +1,11 @@
 mod code;
+mod jsonl;
 mod tree;
 
 use std::path::PathBuf;
 
 pub use code::{ColoredSpan, HighlightedCode, HighlightedLine, RgbColor};
+pub use jsonl::{cell_value, format_log_line, json_log_level, plan_columns, JsonlColumns};
 pub use tree::{build_tree_from_entries, render_tree_unicode, FileTree, TreeNode};
 
 #[derive(Debug, Clone)]
@@ -30,8 +32,16 @@ pub struct ImageContent {
 pub struct MediaInfoContent {
     pub title: String,
     pub format: String,
+    pub container: Option<String>,
     pub duration_secs: Option<f64>,
     pub codec: Option<String>,
+    pub video: Option<String>,
+    pub audio: Option<String>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub fps: Option<f64>,
+    pub channels: Option<u16>,
+    pub sample_rate: Option<u32>,
     pub bitrate: Option<u64>,
     pub extra: Vec<(String, String)>,
 }

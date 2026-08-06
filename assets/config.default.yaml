@@ -43,6 +43,11 @@ terminal:
   document:
     max_chars: 5000
 
+inspect:
+  max_bytes: 10485760
+  max_matches: 200
+  max_rows: 1000
+
 gui:
   window:
     width: 960

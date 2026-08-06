@@ -4,6 +4,7 @@ use anyhow::Result;
 
 use crate::config::OmnicatConfig;
 use crate::content::{hex_preview, render_tree_unicode, PreviewContent};
+use crate::inspect::text::sanitize_text;
 use crate::sinks::styled_table;
 
 pub fn write_content(
@@ -11,9 +12,15 @@ pub fn write_content(
     config: &OmnicatConfig,
     out: &mut dyn Write,
 ) -> Result<()> {
+    let safe = !config.inspect.allow_unsafe;
     match content {
         PreviewContent::Text(text) => {
-            write!(out, "{text}")?;
+            let t = if safe {
+                sanitize_text(text, false)
+            } else {
+                text.clone()
+            };
+            write!(out, "{t}")?;
         }
         PreviewContent::Table(table) => {
             styled_table::write_styled_table(
@@ -39,15 +46,31 @@ pub fn write_content(
                 if i > 0 {
                     writeln!(out, "\n--- slide {} ---\n", i + 1)?;
                 }
-                write!(out, "{slide}")?;
+                let s = if safe {
+                    sanitize_text(slide, false)
+                } else {
+                    slide.clone()
+                };
+                write!(out, "{s}")?;
             }
             writeln!(out)?;
         }
         PreviewContent::Markdown(doc) => {
-            write!(out, "{doc}")?;
+            let t = if safe {
+                sanitize_text(doc, false)
+            } else {
+                doc.clone()
+            };
+            write!(out, "{t}")?;
         }
         PreviewContent::HighlightedCode(code) => {
-            write!(out, "{}", code.plain_text())?;
+            let plain = code.plain_text();
+            let t = if safe {
+                sanitize_text(&plain, false)
+            } else {
+                plain
+            };
+            write!(out, "{t}")?;
         }
         PreviewContent::Hex(hex) => {
             if !hex.metadata.is_empty() {

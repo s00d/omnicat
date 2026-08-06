@@ -101,6 +101,12 @@ pub fn print_status() -> Result<()> {
         config.behavior.external_timeout_secs
     );
 
+    println!("\nINSPECT");
+    println!("  max_bytes: {}", config.inspect.max_bytes);
+    println!("  max_matches: {}", config.inspect.max_matches);
+    println!("  max_rows: {}", config.inspect.max_rows);
+    println!("  tip: omnicat --capabilities");
+
     Ok(())
 }
 

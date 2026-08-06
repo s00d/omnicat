@@ -13,7 +13,23 @@ pub struct OmnicatConfig {
     #[serde(default)]
     pub behavior: BehaviorSettings,
     #[serde(default)]
+    pub inspect: InspectSettings,
+    #[serde(default)]
     pub handlers: HashMap<String, HandlerConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InspectSettings {
+    #[serde(default = "default_inspect_max_bytes")]
+    pub max_bytes: usize,
+    #[serde(default = "default_inspect_max_matches")]
+    pub max_matches: usize,
+    #[serde(default = "default_inspect_max_rows")]
+    pub max_rows: usize,
+    #[serde(default)]
+    pub allow_unsafe: bool,
+    #[serde(default)]
+    pub no_limit: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -389,6 +405,15 @@ fn default_dir_depth() -> usize {
 fn default_gui_dir_depth() -> usize {
     5
 }
+fn default_inspect_max_bytes() -> usize {
+    10_485_760 // 10 MB
+}
+fn default_inspect_max_matches() -> usize {
+    200
+}
+fn default_inspect_max_rows() -> usize {
+    1000
+}
 
 impl Default for MarkdownDisplay {
     fn default() -> Self {
@@ -532,6 +557,18 @@ impl Default for GuiSettings {
 impl Default for BehaviorSettings {
     fn default() -> Self {
         OmnicatConfig::default().behavior
+    }
+}
+
+impl Default for InspectSettings {
+    fn default() -> Self {
+        Self {
+            max_bytes: default_inspect_max_bytes(),
+            max_matches: default_inspect_max_matches(),
+            max_rows: default_inspect_max_rows(),
+            allow_unsafe: false,
+            no_limit: false,
+        }
     }
 }
 

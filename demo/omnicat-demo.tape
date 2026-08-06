@@ -1,75 +1,84 @@
-# Record: vhs demo/omnicat-demo.tape
-# Requires: brew install vhs && cargo build --release
+# Record from repo root: cargo build --release && vhs demo/omnicat-demo.tape
+# Commands are typed while hidden — GIF shows output, not keystrokes.
 
 Output demo/omnicat-demo.gif
 
 Set Shell "zsh"
-Set FontSize 16
-Set Width 1200
-Set Height 700
-Set Padding 28
-Set Framerate 12
+Set FontSize 15
+Set Width 1120
+Set Height 660
+Set Padding 24
+Set Framerate 15
 Set PlaybackSpeed 1.0
 Set Theme "Catppuccin Mocha"
 Set WindowBar Colorful
 Set BorderRadius 8
 
+# Ensure binary exists (hidden; skip if already built).
 Hide
-Type "cd /Users/s00d/Downloads/smartcat-main"
+Type "test -x ./target/release/omnicat || cargo build --release -q"
 Enter
-Type "cargo build --release -q"
-Enter
-Sleep 8s
-Show
+Sleep 3s
 
-Type "echo 'omnicat — universal file preview'"
-Enter
-Sleep 1.2s
-
+# Markdown
+Hide
 Type "clear"
-Enter
-Type "echo '▸ Markdown'"
 Enter
 Type "./target/release/omnicat demo/files/sample.md"
 Enter
-Sleep 4.5s
+Show
+Sleep 5s
 
+# Rust syntax highlight
+Hide
 Type "clear"
-Enter
-Type "echo '▸ Rust syntax highlight'"
 Enter
 Type "./target/release/omnicat demo/files/sample.rs"
 Enter
-Sleep 4s
+Show
+Sleep 4.5s
 
+# CSV table
+Hide
 Type "clear"
-Enter
-Type "echo '▸ CSV table'"
 Enter
 Type "./target/release/omnicat demo/files/sample.csv"
 Enter
-Sleep 3.5s
+Show
+Sleep 4s
 
+# Database query (streaming SQL on dump)
+Hide
 Type "clear"
 Enter
-Type "echo '▸ Directory tree'"
+Type "./target/release/omnicat db demo/db/sample.sql --query 'SELECT id FROM users LIMIT 5'"
+Enter
+Show
+Sleep 5s
+
+# Log analysis
+Hide
+Type "clear"
+Enter
+Type "./target/release/omnicat log demo/log/json.log --stats"
+Enter
+Show
+Sleep 4s
+
+# Directory tree
+Hide
+Type "clear"
 Enter
 Type "./target/release/omnicat demo/dir-tree"
 Enter
-Sleep 3s
+Show
+Sleep 3.5s
 
+# Handler overview
+Hide
 Type "clear"
-Enter
-Type "echo '▸ Binary hex dump'"
-Enter
-Type "./target/release/omnicat demo/files/sample.bin"
-Enter
-Sleep 3s
-
-Type "clear"
-Enter
-Type "echo '▸ omnicat --status'"
 Enter
 Type "./target/release/omnicat --status"
 Enter
-Sleep 4s
+Show
+Sleep 3s

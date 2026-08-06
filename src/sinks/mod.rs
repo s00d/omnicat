@@ -1,5 +1,9 @@
 pub mod audio_playback;
+pub mod db_report;
 pub mod gui;
+pub mod log_report;
 pub mod paginate;
+pub mod progress;
+pub mod report;
 pub mod styled_table;
 pub mod terminal;

@@ -23,7 +23,7 @@ impl PreviewDriver for ArchiveDriver {
     fn extensions(&self) -> &'static [&'static str] {
         &[
             "zip", "jar", "war", "ear", "apk", "ipa", "xpi", "whl", "nupkg", "tar", "tgz", "gz",
-            "bz2", "xz", "7z",
+            "bz2", "xz", "7z", "zst", "zstd",
         ]
     }
 
@@ -64,9 +64,11 @@ fn build_archive_tree(path: &Path, config: &OmnicatConfig) -> Result<FileTree> {
     } else if ext == "7z" {
         collect_7z(path)?
     } else if name.ends_with(".tar.gz") || ext == "tgz" {
-        collect_tar(path, true)?
+        collect_tar(path, TarComp::Gzip)?
+    } else if name.ends_with(".tar.zst") || name.ends_with(".tar.zstd") {
+        collect_tar(path, TarComp::Zstd)?
     } else if ext == "tar" {
-        collect_tar(path, false)?
+        collect_tar(path, TarComp::None)?
     } else if ext == "gz" && !name.ends_with(".tar.gz") {
         vec![(
             path.file_name()
@@ -77,7 +79,7 @@ fn build_archive_tree(path: &Path, config: &OmnicatConfig) -> Result<FileTree> {
             Some(std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)),
             Some("-rw-r--r--".into()),
         )]
-    } else if ext == "bz2" || ext == "xz" {
+    } else if ext == "bz2" || ext == "xz" || ext == "zst" || ext == "zstd" {
         vec![(
             path.display().to_string(),
             false,
@@ -85,7 +87,7 @@ fn build_archive_tree(path: &Path, config: &OmnicatConfig) -> Result<FileTree> {
             None,
         )]
     } else {
-        collect_tar(path, false)?
+        collect_tar(path, TarComp::None)?
     };
 
     Ok(build_tree_from_entries(
@@ -134,36 +136,33 @@ fn filter_noise_entries(entries: Vec<ArchiveEntry>) -> Vec<ArchiveEntry> {
         .collect()
 }
 
-fn collect_tar(path: &Path, gz: bool) -> Result<Vec<ArchiveEntry>> {
+fn collect_tar(path: &Path, compression: TarComp) -> Result<Vec<ArchiveEntry>> {
     let file = File::open(path)?;
+    let reader: Box<dyn std::io::Read> = match compression {
+        TarComp::None => Box::new(file),
+        TarComp::Gzip => Box::new(GzDecoder::new(file)),
+        TarComp::Zstd => Box::new(zstd::Decoder::new(file).context("zstd decoder")?),
+    };
+    let mut archive = Archive::new(reader);
     let mut out = Vec::new();
-    if gz {
-        let decoder = GzDecoder::new(file);
-        let mut archive = Archive::new(decoder);
-        for entry in archive.entries().context("tar entries")? {
-            let entry = entry.context("tar entry")?;
-            let p = entry.path().context("tar path")?;
-            out.push((
-                p.display().to_string(),
-                entry.header().entry_type().is_dir(),
-                Some(entry.header().size().unwrap_or(0)),
-                Some(format_mode(entry.header().mode().unwrap_or(0))),
-            ));
-        }
-    } else {
-        let mut archive = Archive::new(file);
-        for entry in archive.entries().context("tar entries")? {
-            let entry = entry.context("tar entry")?;
-            let p = entry.path().context("tar path")?;
-            out.push((
-                p.display().to_string(),
-                entry.header().entry_type().is_dir(),
-                Some(entry.header().size().unwrap_or(0)),
-                Some(format_mode(entry.header().mode().unwrap_or(0))),
-            ));
-        }
+    for entry in archive.entries().context("tar entries")? {
+        let entry = entry.context("tar entry")?;
+        let p = entry.path().context("tar path")?;
+        out.push((
+            p.display().to_string(),
+            entry.header().entry_type().is_dir(),
+            Some(entry.header().size().unwrap_or(0)),
+            Some(format_mode(entry.header().mode().unwrap_or(0))),
+        ));
     }
     Ok(filter_noise_entries(out))
+}
+
+#[derive(Clone, Copy)]
+enum TarComp {
+    None,
+    Gzip,
+    Zstd,
 }
 
 fn collect_7z(path: &Path) -> Result<Vec<ArchiveEntry>> {

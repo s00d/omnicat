@@ -1,0 +1,3 @@
+ts=2026-08-06T10:01:01Z level=info service=worker msg="job accepted" job_id=42
+ts=2026-08-06T10:01:02Z level=warn service=worker msg="retry scheduled" job_id=43 attempt=2
+ts=2026-08-06T10:01:03Z level=error service=worker msg="job failed" job_id=44 error=timeout

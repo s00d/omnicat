@@ -1,11 +1,16 @@
 pub mod cli;
 pub mod config;
 pub mod content;
+pub mod db;
 pub mod detect;
 pub mod drivers;
 pub mod editor;
 pub mod gate;
 pub mod init;
+pub mod input;
+pub mod inspect;
+pub mod io;
+pub mod log;
 pub mod orchestrator;
 pub mod preview;
 pub mod sinks;
@@ -13,7 +18,7 @@ pub mod status;
 
 mod cat;
 
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -24,6 +29,8 @@ use crate::cli::{Cli, Command, FileOptions};
 use crate::config::load_config;
 use crate::detect::HandlerKind;
 use crate::gate::should_render;
+use crate::inspect::InspectOptions;
+use crate::log::options::LogOptions;
 use crate::orchestrator::resolve::ResolvedHandler;
 use crate::orchestrator::{print_hint, PreviewOrchestrator};
 
@@ -34,12 +41,6 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Version => {
-            println!("{APP_NAME} {VERSION}");
-        }
-        Command::Help => {
-            print!("{}", Cli::help_text());
-        }
         Command::Init { shell } => {
             init::print_init(&shell)?;
         }
@@ -53,8 +54,17 @@ pub fn run() -> Result<()> {
         Command::File { path, options } => {
             handle_file(&path, &options)?;
         }
-        Command::Edit { file, editor } => {
-            editor::open(Path::new(&file), editor.as_deref())?;
+        Command::Inspect { path, options } => {
+            handle_inspect(path.as_deref(), &options)?;
+        }
+        Command::Open { file, editor } => {
+            editor::open_path(Path::new(&file), editor.as_deref())?;
+        }
+        Command::Log { paths, options } => {
+            handle_log(&paths, &options)?;
+        }
+        Command::Db { source, options } => {
+            db::run_db(&source, &options)?;
         }
     }
 
@@ -71,16 +81,40 @@ pub fn run_main() -> ExitCode {
     }
 }
 
+fn handle_inspect(path: Option<&str>, options: &InspectOptions) -> Result<()> {
+    let config = load_config()?;
+    inspect::run_inspect(path, options, &config)
+}
+
+fn handle_log(paths: &[std::path::PathBuf], options: &LogOptions) -> Result<()> {
+    log::commands::run_log(paths, options)
+}
+
 fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
-    if !should_render(path) {
+    let input = match input::InputRef::parse(path) {
+        Ok(input) => input,
+        Err(_) => {
+            passthrough_cat(&[path])?;
+            return Ok(());
+        }
+    };
+
+    let render_path = input.path_for_ops();
+    let is_virtual = input.virtual_path.is_some();
+
+    // Plain preview still requires TTY; virtual archive paths always render.
+    if !is_virtual && !should_render(path) {
         passthrough_cat(&[path])?;
         return Ok(());
     }
 
-    let path = Path::new(path);
     let config = load_config()?;
+    let mut config = config;
+    if options.allow_unsafe {
+        config.inspect.allow_unsafe = true;
+    }
 
-    let resolved = PreviewOrchestrator::resolve(path, &config).or_else(|| {
+    let resolved = PreviewOrchestrator::resolve(render_path, &config).or_else(|| {
         if config.behavior.on_unknown_format == "fallback" {
             Some(ResolvedHandler::Builtin(HandlerKind::Fallback))
         } else {
@@ -90,7 +124,7 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
 
     if let Some(resolved) = resolved {
         if options.preview {
-            match preview::try_open_preview(path, &resolved, &config) {
+            match preview::try_open_preview(render_path, &resolved, &config) {
                 Ok(true) => {
                     if options.preview_only {
                         return Ok(());
@@ -101,7 +135,7 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
                         "{APP_NAME}: GUI preview unavailable (no display); falling back to terminal render"
                     );
                     if config.behavior.preview_fallback == "cat" {
-                        passthrough_cat(&[path.to_string_lossy().as_ref()])?;
+                        passthrough_cat(&[path])?;
                         return Ok(());
                     }
                 }
@@ -120,7 +154,6 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
 
         let render_config = if use_pagination {
             let mut c = config.clone();
-            // Full text for the pager; screen size limits display, not extraction.
             c.terminal.document.max_chars = 0;
             c.terminal.plain = true;
             c
@@ -132,7 +165,7 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
             let mut buf = Vec::new();
             if let Err(err) = PreviewOrchestrator::render_terminal_resolved(
                 &resolved,
-                path,
+                render_path,
                 &render_config,
                 &mut buf,
             ) {
@@ -140,15 +173,15 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
                 if let Some(handler) = handler_config_for_resolved(&resolved, &config) {
                     print_hint(handler);
                 }
-                passthrough_cat(&[path.to_string_lossy().as_ref()])?;
+                passthrough_cat(&[path])?;
             } else {
                 sinks::paginate::write_paged(&buf, &config.terminal.paginate)?;
             }
         } else {
-            let mut stdout = io::stdout().lock();
+            let mut stdout = std::io::stdout().lock();
             if let Err(err) = PreviewOrchestrator::render_terminal_resolved(
                 &resolved,
-                path,
+                render_path,
                 &render_config,
                 &mut stdout,
             ) {
@@ -157,13 +190,13 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
                 if let Some(handler) = handler_config_for_resolved(&resolved, &config) {
                     print_hint(handler);
                 }
-                passthrough_cat(&[path.to_string_lossy().as_ref()])?;
+                passthrough_cat(&[path])?;
             } else {
                 stdout.flush()?;
             }
         }
     } else {
-        passthrough_cat(&[path.to_string_lossy().as_ref()])?;
+        passthrough_cat(&[path])?;
     }
 
     Ok(())

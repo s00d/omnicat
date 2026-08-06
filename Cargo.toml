@@ -1,6 +1,6 @@
 [package]
 name = "omnicat"
-version = "0.8.1"
+version = "0.9.0"
 edition = "2021"
 rust-version = "1.92"
 description = "Universal file preview for terminal and GUI — a context-aware cat"
@@ -19,9 +19,10 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1"
-arrow = "59"
+arrow = "58.3"
 calamine = "0.35"
 cfb = "0.14"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
 clap = { version = "4", features = ["derive"] }
 comfy-table = { version = "7", features = ["custom_styling"] }
 crossterm = "0.29"
@@ -33,6 +34,7 @@ epub = "2.1"
 flate2 = "1"
 image = "0.25"
 infer = "0.19"
+mime_guess = "2"
 ini = "1"
 is-terminal = "0.4"
 once_cell = "1"
@@ -40,7 +42,7 @@ pulldown-cmark = "0.13"
 pdf-extract = "0.10"
 mail-parser = "0.11"
 mp4parse = "0.17"
-parquet = { version = "59", features = ["arrow"] }
+parquet = { version = "58.3", features = ["arrow"] }
 plist = { version = "1", features = ["serde"] }
 quick-xml = "0.40"
 rusqlite = { version = "0.39", features = ["bundled"] }
@@ -62,14 +64,37 @@ viuer = { version = "0.11", features = ["print-file"] }
 wait-timeout = "0.2"
 which = "8"
 zip = "8"
-bzip2 = "0.6"
-xz2 = "0.1"
+bzip2 = "0.6.1"
+liblzma = "0.4"
 mobi = "0.8"
 mermaid-text = "0.56.1"
-edit = { version = "0.1.5", features = ["quoted-env"] }
+open = "5"
+blake3 = "1.8.6"
+sha2 = "0.11.0"
+md-5 = "0.11.0"
+sha1 = "0.11.0"
+hex = "0.4.3"
+zstd = "0.13.3"
+memchr = "2.8.3"
+memmap2 = "0.9.11"
+positioned-io2 = "0.3.4"
+nom = "8.0.0"
+aho-corasick = "1.1.5"
+async-trait = "0.1"
+indexmap = "2"
+datafusion = "54.1"
+datafusion-datasource = "54.1"
+datafusion-physical-expr = "54.1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+futures = "0.3"
+sqlparser = "0.58"
+rdb = "0.3"
+bson = "2.15"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["process"] }
+
+tempfile = "3"
 
 [dev-dependencies]
 assert_cmd = "2"
@@ -78,6 +103,12 @@ portable-pty = "0.9"
 predicates = "3"
 tempfile = "3"
 
+[lints.rust]
+linker_messages = "allow"
+
+[profile.dev]
+debug = 1
+split-debuginfo = "unpacked"
 
 [profile.release]
 opt-level = "z" # Оптимизация для размера

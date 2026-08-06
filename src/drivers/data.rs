@@ -93,6 +93,7 @@ impl PreviewDriver for DataDriver {
                 let raw = fs::read_to_string(path)?;
                 Ok(PreviewContent::Table(parse_delimited(&raw, b'\t', config)?))
             }
+            "jsonl" | "ndjson" => build_jsonl_table(path, config),
             _ => {
                 let text = capture_render(|buf| self.render(path, config, buf))?;
                 Ok(PreviewContent::Text(text))
@@ -157,11 +158,15 @@ fn parse_delimited(raw: &str, delimiter: u8, config: &OmnicatConfig) -> Result<T
 
 fn render_delimited_terminal(raw: &str, delimiter: u8, config: &OmnicatConfig) -> Result<String> {
     let records = read_delimited_records(raw, delimiter)?;
+    let total = records
+        .len()
+        .saturating_sub(if records.is_empty() { 0 } else { 1 });
     let mut table = Table::new();
     crate::sinks::styled_table::configure_table(&mut table, config.terminal.data.table_border);
     if let Some(header) = records.first() {
         crate::sinks::styled_table::set_styled_header(&mut table, header.clone(), config);
-        for row in records.iter().skip(1) {
+        let max = config.terminal.data.max_rows;
+        for row in records.iter().skip(1).take(max) {
             crate::sinks::styled_table::add_styled_row(&mut table, row.clone(), config);
         }
     } else {
@@ -169,7 +174,51 @@ fn render_delimited_terminal(raw: &str, delimiter: u8, config: &OmnicatConfig) -
             crate::sinks::styled_table::add_styled_row(&mut table, row.clone(), config);
         }
     }
-    Ok(table.to_string())
+    let cols = records.first().map(|r| r.len()).unwrap_or(0);
+    Ok(format!("{table}\n\n{total} rows × {cols} columns"))
+}
+
+fn build_jsonl_table(path: &Path, config: &OmnicatConfig) -> Result<PreviewContent> {
+    use crate::content::{cell_value, plan_columns};
+
+    let raw = fs::read_to_string(path)?;
+    let mut keys: Vec<String> = Vec::new();
+    let mut key_set = std::collections::BTreeSet::new();
+    let mut objects = Vec::new();
+    let max = config.terminal.data.max_rows;
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(line)
+        {
+            for k in map.keys() {
+                if key_set.insert(k.clone()) {
+                    keys.push(k.clone());
+                }
+            }
+            objects.push(map);
+            if objects.len() >= max {
+                break;
+            }
+        }
+    }
+    let cols = plan_columns(&keys);
+    let rows: Vec<Vec<String>> = objects
+        .into_iter()
+        .map(|map| {
+            cols.source_keys
+                .iter()
+                .map(|k| cell_value(&map, k))
+                .collect()
+        })
+        .collect();
+    Ok(PreviewContent::Table(TableContent {
+        title: Some("JSONL".into()),
+        headers: cols.headers,
+        rows,
+    }))
 }
 
 fn read_delimited_records(raw: &str, delimiter: u8) -> Result<Vec<Vec<String>>> {
