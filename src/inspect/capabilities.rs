@@ -75,23 +75,6 @@ impl Capabilities {
                 watch: false,
                 virtual_path: false,
             },
-            HandlerKind::Pdf => Self {
-                preview: true,
-                info: true,
-                schema: false,
-                find: true,
-                stats: true,
-                query: false,
-                diff: true,
-                text: true,
-                metadata: true,
-                hash: true,
-                duplicates: false,
-                encoding: false,
-                follow: false,
-                watch: false,
-                virtual_path: false,
-            },
             HandlerKind::Archive => Self {
                 preview: true,
                 info: true,
@@ -143,7 +126,11 @@ impl Capabilities {
                 watch: false,
                 virtual_path: false,
             },
-            HandlerKind::Document | HandlerKind::Ebook | HandlerKind::Email => Self {
+            HandlerKind::Pdf
+            | HandlerKind::Document
+            | HandlerKind::Presentation
+            | HandlerKind::Ebook
+            | HandlerKind::Email => Self {
                 preview: true,
                 info: true,
                 schema: false,
@@ -160,28 +147,11 @@ impl Capabilities {
                 watch: false,
                 virtual_path: false,
             },
-            HandlerKind::Presentation | HandlerKind::Notebook => Self {
+            HandlerKind::Notebook => Self {
                 preview: true,
                 info: true,
                 schema: false,
                 find: true,
-                stats: false,
-                query: false,
-                diff: false,
-                text: true,
-                metadata: true,
-                hash: true,
-                duplicates: false,
-                encoding: false,
-                follow: false,
-                watch: false,
-                virtual_path: false,
-            },
-            HandlerKind::LegacyOffice => Self {
-                preview: true,
-                info: true,
-                schema: false,
-                find: false,
                 stats: false,
                 query: false,
                 diff: false,

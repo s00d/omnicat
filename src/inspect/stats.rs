@@ -24,7 +24,11 @@ pub fn build_stats(
         HandlerKind::Data | HandlerKind::Fallback | HandlerKind::Plist => {
             stats_text(path, display, kind, config)
         }
-        HandlerKind::Pdf => stats_pdf(path, display),
+        HandlerKind::Pdf
+        | HandlerKind::Document
+        | HandlerKind::Presentation
+        | HandlerKind::Ebook
+        | HandlerKind::Email => stats_converted(path, display, kind, config),
         HandlerKind::Database => stats_database(path, display),
         HandlerKind::Image => stats_image(path, display),
         HandlerKind::Media => stats_media(path, display, config),
@@ -422,20 +426,23 @@ fn world() {}
     }
 }
 
-fn stats_pdf(path: &Path, display: &str) -> Result<StatsReport> {
-    let bytes = fs::read(path)?;
-    let text = pdf_extract::extract_text_from_mem(&bytes).unwrap_or_default();
-    let pages = text.matches('\u{0c}').count() + if text.is_empty() { 0 } else { 1 };
+fn stats_converted(
+    path: &Path,
+    display: &str,
+    kind: HandlerKind,
+    config: &OmnicatConfig,
+) -> Result<StatsReport> {
+    let text = DriverRegistry::build(kind, path, config)?.plain_text();
     let mut fields = BTreeMap::new();
-    fields.insert("pages".into(), serde_json::json!(pages));
     fields.insert("characters".into(), serde_json::json!(text.chars().count()));
     fields.insert(
         "words".into(),
         serde_json::json!(text.split_whitespace().count()),
     );
+    fields.insert("lines".into(), serde_json::json!(text.lines().count()));
     Ok(StatsReport {
         path: display.to_string(),
-        handler: "pdf".into(),
+        handler: kind.name().into(),
         fields,
         groups: BTreeMap::new(),
     })

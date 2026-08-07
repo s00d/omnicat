@@ -152,7 +152,7 @@ fn demo_fixtures_build() {
         ("files/sample.docx", "document"),
         ("files/sample.pptx", "presentation"),
         ("files/sample.epub", "ebook"),
-        ("files/sample.cbz", "ebook"),
+        ("files/sample.cbz", "archive"),
         ("files/sample.mobi", "ebook"),
         ("files/sample.wav", "media"),
         ("files/sample.sqlite", "database"),

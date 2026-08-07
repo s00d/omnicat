@@ -260,17 +260,57 @@ def write_ods(path: Path) -> None:
 def write_pptx(path: Path) -> None:
     slide = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+       xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <p:cSld><p:spTree>
-    <p:sp><p:txBody><a:p><a:r><a:t>Slide 1 — omnicat PPTX demo</a:t></a:r></a:p></p:txBody></p:sp>
+    <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>
+    <p:sp>
+      <p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+      <p:spPr/><p:txBody><a:bodyPr/><a:p><a:r><a:t>{title}</a:t></a:r></a:p></p:txBody>
+    </p:sp>
+    <p:sp>
+      <p:nvSpPr><p:cNvPr id="3" name="Body"/><p:cNvSpPr/><p:nvPr><p:ph idx="1"/></p:nvPr></p:nvSpPr>
+      <p:spPr/><p:txBody><a:bodyPr/><a:p><a:r><a:t>{body}</a:t></a:r></a:p></p:txBody>
+    </p:sp>
   </p:spTree></p:cSld>
 </p:sld>"""
-    slide2 = slide.replace("Slide 1", "Slide 2")
     zip_write(
         path,
         {
-            "ppt/slides/slide1.xml": slide,
-            "ppt/slides/slide2.xml": slide2,
+            "[Content_Types].xml": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+</Types>""",
+            "_rels/.rels": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>""",
+            "ppt/presentation.xml": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:sldIdLst>
+    <p:sldId id="256" r:id="rId1"/>
+    <p:sldId id="257" r:id="rId2"/>
+  </p:sldIdLst>
+</p:presentation>""",
+            "ppt/_rels/presentation.xml.rels": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>
+</Relationships>""",
+            "ppt/slides/slide1.xml": slide.format(
+                title="Slide 1 — omnicat PPTX demo",
+                body="First slide body for preview.",
+            ),
+            "ppt/slides/slide2.xml": slide.format(
+                title="Slide 2 — omnicat PPTX demo",
+                body="Second slide body for preview.",
+            ),
         },
     )
 
@@ -279,10 +319,22 @@ def write_odp(path: Path) -> None:
     content = """<?xml version="1.0" encoding="UTF-8"?>
 <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
   xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"
   xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">
   <office:body><office:presentation>
-    <draw:page><text:p>ODP slide one</text:p></draw:page>
-    <draw:page><text:p>ODP slide two</text:p></draw:page>
+    <draw:page draw:name="page1">
+      <draw:frame presentation:class="title">
+        <draw:text-box><text:p>ODP slide one</text:p></draw:text-box>
+      </draw:frame>
+      <draw:frame presentation:class="outline">
+        <draw:text-box><text:p>First slide body.</text:p></draw:text-box>
+      </draw:frame>
+    </draw:page>
+    <draw:page draw:name="page2">
+      <draw:frame presentation:class="title">
+        <draw:text-box><text:p>ODP slide two</text:p></draw:text-box>
+      </draw:frame>
+    </draw:page>
   </office:presentation></office:body>
 </office:document-content>"""
     zip_write(path, {"content.xml": content})

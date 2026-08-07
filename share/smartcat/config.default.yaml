@@ -14,7 +14,5 @@ display:
   image:
     max_width: 0
     protocol: auto
-  pdf:
-    page_separator: true
   archive:
     long_format: true

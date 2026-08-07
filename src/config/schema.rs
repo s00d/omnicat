@@ -57,8 +57,6 @@ pub struct TerminalSettings {
     #[serde(default)]
     pub media: MediaDisplay,
     #[serde(default)]
-    pub pdf: PdfDisplay,
-    #[serde(default)]
     pub archive: ArchiveDisplay,
     #[serde(default)]
     pub directory: DirectoryDisplay,
@@ -99,8 +97,6 @@ pub struct GuiSettings {
     pub preview: GuiPreview,
     #[serde(default)]
     pub spreadsheet: GuiSpreadsheet,
-    #[serde(default)]
-    pub document: GuiDocument,
     #[serde(default)]
     pub image: GuiImage,
     #[serde(default)]
@@ -167,14 +163,6 @@ pub struct ImageDisplay {
 pub struct MediaDisplay {
     #[serde(default = "default_true")]
     pub playback: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct PdfDisplay {
-    #[serde(default = "default_true")]
-    pub page_separator: bool,
-    #[serde(default)]
-    pub max_pages: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -261,14 +249,6 @@ pub struct GuiSpreadsheet {
     pub grid_lines: bool,
     #[serde(default = "default_true")]
     pub freeze_header: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiDocument {
-    #[serde(default = "default_max_paragraphs")]
-    pub max_paragraphs: usize,
-    #[serde(default = "default_true")]
-    pub show_page_breaks: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -380,9 +360,6 @@ fn default_gui_max_rows() -> usize {
 fn default_gui_max_cols() -> usize {
     50
 }
-fn default_max_paragraphs() -> usize {
-    5000
-}
 
 fn default_terminal_document_max_chars() -> usize {
     5000
@@ -445,12 +422,6 @@ impl Default for MediaDisplay {
     }
 }
 
-impl Default for PdfDisplay {
-    fn default() -> Self {
-        OmnicatConfig::default().terminal.pdf
-    }
-}
-
 impl Default for ArchiveDisplay {
     fn default() -> Self {
         OmnicatConfig::default().terminal.archive
@@ -502,12 +473,6 @@ impl Default for GuiPreview {
 impl Default for GuiSpreadsheet {
     fn default() -> Self {
         OmnicatConfig::default().gui.spreadsheet
-    }
-}
-
-impl Default for GuiDocument {
-    fn default() -> Self {
-        OmnicatConfig::default().gui.document
     }
 }
 
@@ -571,9 +536,6 @@ impl Default for InspectSettings {
         }
     }
 }
-
-// Backward compat alias used by render modules
-pub type DisplayConfig = OmnicatConfig;
 
 #[cfg(test)]
 mod tests {

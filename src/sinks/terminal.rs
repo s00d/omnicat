@@ -56,12 +56,12 @@ pub fn write_content(
             writeln!(out)?;
         }
         PreviewContent::Markdown(doc) => {
-            let t = if safe {
+            let md = if safe {
                 sanitize_text(doc, false)
             } else {
                 doc.clone()
             };
-            write!(out, "{t}")?;
+            crate::drivers::markdown::MarkdownDriver::render_str(&md, config, out)?;
         }
         PreviewContent::HighlightedCode(code) => {
             let plain = code.plain_text();

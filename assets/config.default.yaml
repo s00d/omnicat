@@ -21,9 +21,6 @@ terminal:
     protocol: auto
   media:
     playback: true
-  pdf:
-    page_separator: true
-    max_pages: 0
   archive:
     long_format: true
     max_entries: 500
@@ -72,9 +69,6 @@ gui:
     header_row: true
     grid_lines: true
     freeze_header: true
-  document:
-    max_paragraphs: 5000
-    show_page_breaks: true
   image:
     fit: contain
     background: "#1e1e1e"

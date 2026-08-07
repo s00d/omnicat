@@ -21,7 +21,6 @@ use crate::drivers::markdown::MarkdownDriver;
 use crate::drivers::media::MediaDriver;
 use crate::drivers::notebook::NotebookDriver;
 use crate::drivers::office::document::DocumentDriver;
-use crate::drivers::office::legacy::LegacyOfficeDriver;
 use crate::drivers::office::presentation::PresentationDriver;
 use crate::drivers::office::spreadsheet::SpreadsheetDriver;
 use crate::drivers::pdf::PdfDriver;
@@ -38,7 +37,6 @@ static DRIVERS: &[&dyn PreviewDriver] = &[
     &SpreadsheetDriver,
     &DocumentDriver,
     &PresentationDriver,
-    &LegacyOfficeDriver,
     &DirectoryDriver,
     &EbookDriver,
     &MediaDriver,

@@ -138,6 +138,7 @@ fn print_terminal_settings(cfg: &OmnicatConfig) {
         "  paginate.enabled: {}  page_lines: {}",
         t.paginate.enabled, t.paginate.page_lines
     );
+    let _ = writeln!(buf, "  document.max_chars: {}", t.document.max_chars);
     print!("{buf}");
 }
 
@@ -148,11 +149,6 @@ fn print_gui_settings(cfg: &OmnicatConfig) {
     let _ = writeln!(buf, "  theme.mode: {}", g.theme.mode);
     let _ = writeln!(buf, "  theme.font_size: {}", g.theme.font_size);
     let _ = writeln!(buf, "  spreadsheet.max_rows: {}", g.spreadsheet.max_rows);
-    let _ = writeln!(
-        buf,
-        "  document.max_paragraphs: {}",
-        g.document.max_paragraphs
-    );
     print!("{buf}");
 }
 

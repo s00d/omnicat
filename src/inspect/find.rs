@@ -36,7 +36,7 @@ pub fn build_find(
         HandlerKind::Database => {
             find_in_sqlite(path, query, max, &mut matches, &mut truncated)?;
         }
-        HandlerKind::Pdf | HandlerKind::Document | HandlerKind::Ebook | HandlerKind::Email => {
+        HandlerKind::Pdf | HandlerKind::Document | HandlerKind::Presentation | HandlerKind::Ebook | HandlerKind::Email => {
             let text = extract_preview_text(path, kind, config)?;
             find_in_text(&text, query, max, None, &mut matches, &mut truncated);
         }

@@ -8,6 +8,7 @@ use crate::detect::HandlerKind;
 
 pub mod archive;
 pub mod code;
+pub mod convert;
 pub mod data;
 pub mod database;
 pub mod directory;
@@ -17,6 +18,7 @@ pub mod external;
 pub mod fallback;
 pub mod font;
 pub mod highlight;
+mod html_md;
 pub mod image;
 pub mod markdown;
 mod markdown_table;

@@ -59,9 +59,13 @@ pub fn build_info(
             fill_directory(&mut fields, path)?;
             "Directory".into()
         }
-        HandlerKind::Pdf => {
-            fill_pdf(&mut fields, path)?;
-            "PDF".into()
+        HandlerKind::Pdf
+        | HandlerKind::Document
+        | HandlerKind::Presentation
+        | HandlerKind::Ebook
+        | HandlerKind::Email => {
+            fill_documentish(&mut fields, path, kind, config);
+            kind_label(kind, &extension)
         }
         HandlerKind::Font => {
             fill_font(&mut fields, path, config)?;
@@ -70,10 +74,6 @@ pub fn build_info(
         HandlerKind::Spreadsheet => {
             fill_spreadsheet(&mut fields, path)?;
             "Spreadsheet".into()
-        }
-        HandlerKind::Document | HandlerKind::Ebook | HandlerKind::Email => {
-            fill_documentish(&mut fields, path, kind, config);
-            kind_label(kind, &extension)
         }
         HandlerKind::Data
         | HandlerKind::Code
@@ -458,15 +458,6 @@ fn walk_dir_counts(
     Ok(())
 }
 
-fn fill_pdf(fields: &mut BTreeMap<String, serde_json::Value>, path: &Path) -> Result<()> {
-    let bytes = fs::read(path)?;
-    let text = pdf_extract::extract_text_from_mem(&bytes).unwrap_or_default();
-    let pages = text.matches('\u{0c}').count() + if text.is_empty() { 0 } else { 1 };
-    fields.insert("pages".into(), serde_json::json!(pages));
-    fields.insert("characters".into(), serde_json::json!(text.chars().count()));
-    Ok(())
-}
-
 fn fill_font(
     fields: &mut BTreeMap<String, serde_json::Value>,
     path: &Path,
@@ -576,7 +567,10 @@ fn kind_label(kind: HandlerKind, ext: &Option<String>) -> String {
         HandlerKind::Data => format_label("Data", ext, &None),
         HandlerKind::Spreadsheet => "Spreadsheet".into(),
         HandlerKind::Document => "Document".into(),
+        HandlerKind::Pdf => "PDF".into(),
+        HandlerKind::Presentation => "Presentation".into(),
         HandlerKind::Ebook => "Ebook".into(),
+        HandlerKind::Email => "Email".into(),
         HandlerKind::Fallback => "Binary/Text".into(),
         other => other.name().to_string(),
     }

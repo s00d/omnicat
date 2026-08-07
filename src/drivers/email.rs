@@ -8,6 +8,8 @@ use mail_parser::{HeaderName, MessageParser};
 use crate::config::OmnicatConfig;
 use crate::content::{PreviewContent, PreviewContext};
 use crate::detect::HandlerKind;
+use crate::drivers::convert;
+use crate::drivers::html_md;
 use crate::drivers::PreviewDriver;
 
 pub struct EmailDriver;
@@ -28,7 +30,7 @@ impl PreviewDriver for EmailDriver {
     fn build(
         &self,
         path: &Path,
-        _config: &OmnicatConfig,
+        config: &OmnicatConfig,
         _ctx: &PreviewContext,
     ) -> Result<PreviewContent> {
         let mut raw = Vec::new();
@@ -38,36 +40,22 @@ impl PreviewDriver for EmailDriver {
             .context("invalid eml")?;
         let mut out = String::new();
         if let Some(from) = msg.header_raw(HeaderName::From) {
-            out.push_str(&format!("From: {from}\n"));
+            out.push_str(&format!("**From:** {from}\n\n"));
         }
         if let Some(to) = msg.header_raw(HeaderName::To) {
-            out.push_str(&format!("To: {to}\n"));
+            out.push_str(&format!("**To:** {to}\n\n"));
         }
         if let Some(subject) = msg.subject() {
-            out.push_str(&format!("Subject: {subject}\n"));
+            out.push_str(&format!("# {subject}\n\n"));
         }
-        out.push('\n');
         if let Some(body) = msg.body_text(0) {
             out.push_str(&body);
         } else if let Some(html) = msg.body_html(0) {
-            out.push_str(&html_to_text(&html));
+            out.push_str(&html_md::html_to_markdown(&html));
         }
-        Ok(PreviewContent::Text(out))
+        let md = convert::truncate_chars(&out, convert::preview_char_limit(config));
+        Ok(PreviewContent::Markdown(md))
     }
-}
-
-fn html_to_text(html: &str) -> String {
-    let mut out = String::new();
-    let mut in_tag = false;
-    for c in html.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    out
 }
 
 #[cfg(test)]
@@ -93,10 +81,7 @@ mod tests {
         let content = EmailDriver
             .build(f.path(), &OmnicatConfig::default(), &ctx)
             .unwrap();
-        let text = match content {
-            PreviewContent::Text(t) => t,
-            _ => panic!("expected text"),
-        };
+        let text = content.plain_text();
         assert!(text.contains("sender@example.com"));
         assert!(text.contains("Hello email body"));
     }

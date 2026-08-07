@@ -17,8 +17,7 @@ pub fn extract_text(path: &Path, kind: HandlerKind, config: &OmnicatConfig) -> R
         | HandlerKind::Email
         | HandlerKind::Spreadsheet
         | HandlerKind::Presentation
-        | HandlerKind::Notebook
-        | HandlerKind::LegacyOffice => {
+        | HandlerKind::Notebook => {
             let content = DriverRegistry::build(kind, path, config)?;
             Ok(content.plain_text())
         }

@@ -8,7 +8,6 @@ use crate::config::OmnicatConfig;
 use crate::content::PreviewContent;
 use crate::detect::HandlerKind;
 use crate::drivers::code::CodeDriver;
-use crate::drivers::ebook::EbookDriver;
 use crate::drivers::external;
 use crate::drivers::image::ImageDriver;
 use crate::drivers::markdown::MarkdownDriver;
@@ -90,9 +89,6 @@ impl PreviewOrchestrator {
                 }
                 if *kind == HandlerKind::Code {
                     return CodeDriver.render(path, config, out);
-                }
-                if *kind == HandlerKind::Ebook {
-                    return EbookDriver.render_terminal(path, config, out);
                 }
                 if *kind == HandlerKind::Media {
                     return MediaDriver.render_terminal(path, config, out);

@@ -64,18 +64,17 @@ done
 | data | `files/sample.json`, `.yaml`, `.toml`, `.ini`, `.csv`, `.tsv` | |
 | image | `files/sample.png`, `sample-icon.png`, `sample-wide.png`, `sample.gif` | generated |
 | pdf | `files/sample.pdf` | generated |
-| archive | `files/sample.zip`, `sample.tar`, `sample.tar.gz` | generated |
+| archive | `files/sample.zip`, `sample.tar`, `sample.tar.gz`, `sample.cbz` | tree widget |
 | spreadsheet | `files/sample.xlsx`, `sample.ods` | generated |
-| document | `files/sample.docx`, `sample.odt`, `sample.rtf` | |
 | presentation | `files/sample.pptx`, `sample.odp` | generated |
-| legacy_office | `files/sample.doc` | OLE stub → often `Unsupported` |
+| document | `files/sample.docx`, `sample.odt`, `sample.rtf`, `sample.doc` | anydoc → Markdown; stub `.doc` may be Unsupported |
 | directory | `dir-tree/` | tree widget |
-| ebook | `files/sample.epub`, `sample.fb2`, `sample.mobi`, `sample.azw3`, `sample.cbz`, `sample-large.mobi` | large mobi: 100 pages (`LARGE_PAGES=100`); needs calibre |
+| ebook | `files/sample.epub`, `sample.fb2`, `sample.mobi`, `sample.azw3`, `sample-large.mobi` | epub/mobi/fb2 → Markdown; large mobi needs calibre to generate |
 | media | `files/sample.wav` (+ `.mp3`, `.flac`, `.ogg` via ffmpeg) | playback + progress in TTY |
 | font | `files/sample.ttf` | copied system font (after generate) |
 | database | `files/sample.sqlite` | generated |
-| email | `files/sample.eml` | |
-| notebook | `files/sample.ipynb` | slides in GUI |
+| email | `files/sample.eml` | Markdown preview |
+| notebook | `files/sample.ipynb` | Markdown cells |
 | plist | `files/sample.plist` | |
 | fallback (text) | `files/sample.txt` | UTF-8 → source editor |
 | fallback (hex) | `files/sample.bin` | binary dump |
@@ -118,4 +117,4 @@ omnicat db demo/db/sample.rdb --stats
 ./demo/smoke-log-db.sh
 ```
 
-Legacy `.doc` / `.xls` / `.ppt` need real Microsoft Office binaries for useful output; the included `.doc` is a minimal OLE container for detection only.
+Legacy `.doc` uses anydoc (real Word binaries). The bundled `sample.doc` is a minimal OLE stub for detection only — expect Unsupported.

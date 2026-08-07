@@ -440,17 +440,17 @@ Built-in previews (no extra installs):
 | Markdown | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn` |
 | Code | `.rs`, `.py`, `.js`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.jsx`, `.sh`, `.zsh`, `.bash`, `.fish`, `.rb`, `.go`, `.c`, `.h`, `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.cs`, `.java`, `.kt`, `.kts`, `.scala`, `.groovy`, `.gradle`, `.swift`, `.dart`, `.lua`, `.sql`, `.html`, `.htm`, `.xhtml`, `.css`, `.scss`, `.sass`, `.less`, `.styl`, `.vue`, `.svelte`, `.php`, `.pl`, `.pm`, `.r`, `.xml`, `.svg`, `.hs`, `.clj`, `.cljs`, `.cljc`, `.edn`, `.ex`, `.exs`, `.erl`, `.jl`, `.nim`, `.zig`, `.ml`, `.mli`, `.fs`, `.fsx`, `.ps1`, `.bat`, `.cmd`, `.diff`, `.patch`, `.tex`, `.latex`, `.proto`, `.graphql`, `.gql`, `.sol`, `.m`, `.mm`, `.cmake`, `.coffee`, `.vim`, `.asm`, `.s` |
 | Data & config | `.json`, `.jsonl`, `.ndjson`, `.yaml`, `.yml`, `.toml`, `.ini`, `.conf`, `.cfg`, `.properties`, `.env`, `.csv`, `.tsv`, `.parquet`, `.feather`, `.msgpack` |
-| Documents | `.pdf`, `.docx`, `.odt`, `.rtf`, `.doc` |
-| Ebooks | `.epub`, `.mobi`, `.azw`, `.azw1`, `.azw2`, `.azw3`, `.prc`, `.pdb`, `.fb2`, `.fbz`, `.lit`, `.djvu`, `.djv`, `.cbz`, `.cbr`, `.opf` |
+| Documents | `.pdf`, `.docx`, `.docm`, `.odt`, `.rtf`, `.doc` (via anydoc → Markdown) |
+| Ebooks | `.epub` (anydoc → Markdown), `.mobi`/`.azw*` (→ Markdown), `.fb2`/`.fbz` (→ Markdown); `.lit`/`.djvu`/`.cbr`/`.opf` unsupported stubs |
 | Spreadsheets | `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.ods` |
-| Presentations | `.pptx`, `.ppt`, `.odp` |
-| Archives | `.zip`, `.jar`, `.war`, `.ear`, `.apk`, `.ipa`, `.xpi`, `.whl`, `.nupkg`, `.tar`, `.tgz`, `.gz`, `.bz2`, `.xz`, `.7z` |
+| Presentations | `.pptx`, `.pptm`, `.ppsx`, `.ppsm`, `.ppt`, `.pps`, `.pot`, `.odp` (via anydoc → Markdown) |
+| Archives | `.zip`, `.jar`, `.war`, `.ear`, `.apk`, `.ipa`, `.xpi`, `.whl`, `.nupkg`, `.cbz`, `.tar`, `.tgz`, `.gz`, `.bz2`, `.xz`, `.7z` |
 | Media | `.mp3`, `.wav`, `.flac`, `.ogg`, `.oga`, `.opus`, `.m4a`, `.aac`, `.aiff`, `.aif`, `.wma`, `.wv`, `.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.m4v` (metadata; audio may play in terminal) |
 | Images | `.png`, `.apng`, `.jpg`, `.jpeg`, `.jfif`, `.jpe`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.tif`, `.heic`, `.ico`, `.tga`, `.qoi`, `.pnm`, `.pbm`, `.pgm`, `.ppm` |
 | Fonts | `.ttf`, `.otf`, `.woff`, `.woff2` |
 | Databases | `.sqlite`, `.sqlite3`, `.db` (+ dumps via `omnicat db`) |
-| Email | `.eml` |
-| Notebooks | `.ipynb` |
+| Email | `.eml` (→ Markdown) |
+| Notebooks | `.ipynb` (→ Markdown) |
 | Property lists | `.plist` |
 | Directories | any folder (rendered as a file tree) |
 
@@ -466,7 +466,7 @@ Optional YAML — pick the first file that exists:
 2. `~/.config/omnicat/config.yaml`
 3. Bundled defaults shipped with the binary
 
-Tune terminal themes, pager size, archive depth, GUI window size, document limits, and external command chains. See `assets/config.default.yaml` for all options.
+Tune terminal themes, pager size, archive depth, GUI window size, `terminal.document.max_chars`, and external command chains. See `assets/config.default.yaml` for all options.
 
 ### Terminal color theme
 
