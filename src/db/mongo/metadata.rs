@@ -10,8 +10,8 @@ use crate::db::mongo::detect::CollectionRef;
 use crate::db::report::{ColumnInfo, IndexInfo, TableSchema};
 
 pub fn schema_from_metadata(meta_path: &Path, full_name: &str) -> Result<TableSchema> {
-    let text = fs::read_to_string(meta_path)
-        .with_context(|| format!("read {}", meta_path.display()))?;
+    let text =
+        fs::read_to_string(meta_path).with_context(|| format!("read {}", meta_path.display()))?;
     let v: Value = serde_json::from_str(&text).context("parse metadata.json")?;
     let indexes = parse_indexes(&v);
     Ok(TableSchema {
@@ -47,7 +47,11 @@ fn parse_indexes(v: &Value) -> Vec<IndexInfo> {
                 name,
                 columns: cols,
                 unique,
-                kind: if unique { "UNIQUE".into() } else { "INDEX".into() },
+                kind: if unique {
+                    "UNIQUE".into()
+                } else {
+                    "INDEX".into()
+                },
             })
         })
         .collect()

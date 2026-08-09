@@ -14,7 +14,9 @@ use crate::db::mysql::dump::overview::{
 };
 use crate::db::options::DbOptions;
 use crate::db::postgres::inspect_postgres_dump;
-use crate::db::query::{print_query_from_results, run_query, write_extract, write_query_output, QueryDialect};
+use crate::db::query::{
+    print_query_from_results, run_query, write_extract, write_query_output, QueryDialect,
+};
 use crate::db::redis::aof::{aof_paths_for_source, scan_aof};
 use crate::db::redis::rdb::{scan_rdb, RdbScanOptions};
 use crate::db::report::DbReport;
@@ -82,14 +84,16 @@ fn dispatch_mysql_dump(path: &Path, opts: &DbOptions) -> Result<DbReport> {
     Ok(DbReport::OverviewMysqlDump(dump_overview(path)?))
 }
 
-pub fn run_sql_query<F>(
-    path: &Path,
-    opts: &DbOptions,
-    sql: &str,
-    execute: F,
-) -> Result<DbReport>
+pub fn run_sql_query<F>(path: &Path, opts: &DbOptions, sql: &str, execute: F) -> Result<DbReport>
 where
-    F: FnOnce(&Path, &str, Option<&str>) -> Result<(crate::db::report::QueryResultReport, Vec<arrow::record_batch::RecordBatch>)>,
+    F: FnOnce(
+        &Path,
+        &str,
+        Option<&str>,
+    ) -> Result<(
+        crate::db::report::QueryResultReport,
+        Vec<arrow::record_batch::RecordBatch>,
+    )>,
 {
     let table_filter = opts.table.as_deref();
     let (report, _batches) = execute(path, sql, table_filter)?;
@@ -157,7 +161,9 @@ fn dispatch_postgres_dump(path: &Path, opts: &DbOptions) -> Result<DbReport> {
                 bytes: 0,
             })
             .collect();
-        return Ok(DbReport::Tables { tables: table_infos });
+        return Ok(DbReport::Tables {
+            tables: table_infos,
+        });
     }
     Ok(DbReport::OverviewPostgresDump(overview))
 }

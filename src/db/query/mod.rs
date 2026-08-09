@@ -6,10 +6,10 @@ use std::path::Path;
 
 use anyhow::Result;
 
-pub use print::{print_query_from_results, render_mongo_inserts, render_sql_inserts, QueryDialect};
 use arrow::array::{Array, AsArray};
 use arrow::datatypes::DataType;
 use datafusion::prelude::SessionContext;
+pub use print::{print_query_from_results, render_mongo_inserts, render_sql_inserts, QueryDialect};
 
 use crate::db::mysql::dump::provider::register_dump_tables_for_query;
 use crate::db::mysql::dump::schema::fuzzy_column_hint;
@@ -24,10 +24,7 @@ pub async fn run_query(
     let ctx = SessionContext::new();
     let defs = register_dump_tables_for_query(&ctx, path, sql, table_filter).await?;
     let df = ctx.sql(sql).await.map_err(|e| enrich_sql_error(e, &defs))?;
-    let batches = df
-        .collect()
-        .await
-        .map_err(|e| enrich_sql_error(e, &defs))?;
+    let batches = df.collect().await.map_err(|e| enrich_sql_error(e, &defs))?;
     let report = batches_to_report(&batches)?;
     Ok((report, batches))
 }

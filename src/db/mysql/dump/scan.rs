@@ -4,16 +4,14 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use datafusion::common::{DataFusionError, Result as DfResult, Statistics};
-use datafusion::execution::TaskContext;
-use datafusion::logical_expr::Expr;
 use arrow::datatypes::SchemaRef;
 use arrow::record_batch::{RecordBatch, RecordBatchOptions};
+use datafusion::common::{DataFusionError, Result as DfResult, Statistics};
 use datafusion::datasource::source::{DataSource, DataSourceExec};
-use datafusion::physical_plan::{
-    DisplayFormatType, Partitioning, SendableRecordBatchStream,
-};
+use datafusion::execution::TaskContext;
+use datafusion::logical_expr::Expr;
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
+use datafusion::physical_plan::{DisplayFormatType, Partitioning, SendableRecordBatchStream};
 use datafusion_physical_expr::projection::ProjectionExprs;
 use datafusion_physical_expr::EquivalenceProperties;
 
@@ -32,14 +30,17 @@ pub struct DumpScanConfig {
 }
 
 impl DumpScanConfig {
-    pub fn try_new_exec(config: DumpScanConfig) -> DfResult<Arc<dyn datafusion::physical_plan::ExecutionPlan>> {
-        let projected = match &config.projection {
-            Some(p) if p.is_empty() => Arc::new(arrow::datatypes::Schema::empty()),
-            Some(p) => Arc::new(config.schema.project(p).map_err(|e| {
-                DataFusionError::External(format!("project schema: {e}").into())
-            })?),
-            None => config.schema.clone(),
-        };
+    pub fn try_new_exec(
+        config: DumpScanConfig,
+    ) -> DfResult<Arc<dyn datafusion::physical_plan::ExecutionPlan>> {
+        let projected =
+            match &config.projection {
+                Some(p) if p.is_empty() => Arc::new(arrow::datatypes::Schema::empty()),
+                Some(p) => Arc::new(config.schema.project(p).map_err(|e| {
+                    DataFusionError::External(format!("project schema: {e}").into())
+                })?),
+                None => config.schema.clone(),
+            };
         let source = DumpScanSource {
             config,
             projected_schema: projected,
@@ -60,9 +61,8 @@ impl DataSource for DumpScanSource {
         _partition: usize,
         _context: Arc<TaskContext>,
     ) -> DfResult<SendableRecordBatchStream> {
-        let reader = DumpReader::open(&self.config.path).map_err(|e| {
-            DataFusionError::External(format!("open dump: {e:#}").into())
-        })?;
+        let reader = DumpReader::open(&self.config.path)
+            .map_err(|e| DataFusionError::External(format!("open dump: {e:#}").into()))?;
         let full_schema = self.config.schema.clone();
         let projected = self.projected_schema.clone();
         let table = self.config.table.clone();
@@ -96,7 +96,8 @@ impl DataSource for DumpScanSource {
                         }
                         let Some(stmt) = st.reader.next_statement().map_err(|e| {
                             DataFusionError::External(format!("read dump: {e:#}").into())
-                        })? else {
+                        })?
+                        else {
                             st.finished = true;
                             break;
                         };
@@ -119,9 +120,10 @@ impl DataSource for DumpScanSource {
                                 break;
                             }
                         }
-                        if st.fetch.is_some_and(|n| {
-                            st.rows_emitted + st.row_buf.len() as u64 >= n as u64
-                        }) {
+                        if st
+                            .fetch
+                            .is_some_and(|n| st.rows_emitted + st.row_buf.len() as u64 >= n as u64)
+                        {
                             break;
                         }
                     }
@@ -149,20 +151,17 @@ impl DataSource for DumpScanSource {
                     }
                     let chunk: Vec<_> = st.row_buf.drain(..take).collect();
                     st.rows_emitted += chunk.len() as u64;
-                    let batch = build_batch(&fs, &chunk).map_err(|e| {
-                        DataFusionError::External(format!("batch: {e:#}").into())
-                    })?;
+                    let batch = build_batch(&fs, &chunk)
+                        .map_err(|e| DataFusionError::External(format!("batch: {e:#}").into()))?;
                     let batch = match &proj {
-                        Some(p) if p.is_empty() => {
-                            RecordBatch::try_new_with_options(
-                                out_schema.clone(),
-                                vec![],
-                                &RecordBatchOptions::new().with_row_count(Some(chunk.len())),
-                            )
-                            .map_err(|e| {
-                                DataFusionError::External(format!("empty batch: {e}").into())
-                            })?
-                        }
+                        Some(p) if p.is_empty() => RecordBatch::try_new_with_options(
+                            out_schema.clone(),
+                            vec![],
+                            &RecordBatchOptions::new().with_row_count(Some(chunk.len())),
+                        )
+                        .map_err(|e| {
+                            DataFusionError::External(format!("empty batch: {e}").into())
+                        })?,
                         Some(p) => {
                             let cols: Vec<_> = p.iter().map(|i| batch.column(*i).clone()).collect();
                             RecordBatch::try_new(out_schema.clone(), cols).map_err(|e| {
@@ -203,10 +202,7 @@ impl DataSource for DumpScanSource {
         EquivalenceProperties::new(self.projected_schema.clone())
     }
 
-    fn partition_statistics(
-        &self,
-        _partition: Option<usize>,
-    ) -> DfResult<Arc<Statistics>> {
+    fn partition_statistics(&self, _partition: Option<usize>) -> DfResult<Arc<Statistics>> {
         Ok(Arc::new(Statistics::new_unknown(&self.projected_schema)))
     }
 

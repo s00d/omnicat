@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::db::report::RedisAofStats;
 use crate::db::redis::rdb::TopResult;
+use crate::db::report::RedisAofStats;
 use crate::io::source::open_reader;
 
 const FIND_LIMIT: usize = 100;

@@ -16,36 +16,14 @@ pub struct TableDef {
 
 #[derive(Debug, Clone)]
 pub enum RowFilter {
-    Eq {
-        col_idx: usize,
-        value: String,
-    },
-    NotEq {
-        col_idx: usize,
-        value: String,
-    },
-    Gt {
-        col_idx: usize,
-        value: String,
-    },
-    Gte {
-        col_idx: usize,
-        value: String,
-    },
-    Lt {
-        col_idx: usize,
-        value: String,
-    },
-    Lte {
-        col_idx: usize,
-        value: String,
-    },
-    IsNull {
-        col_idx: usize,
-    },
-    IsNotNull {
-        col_idx: usize,
-    },
+    Eq { col_idx: usize, value: String },
+    NotEq { col_idx: usize, value: String },
+    Gt { col_idx: usize, value: String },
+    Gte { col_idx: usize, value: String },
+    Lt { col_idx: usize, value: String },
+    Lte { col_idx: usize, value: String },
+    IsNull { col_idx: usize },
+    IsNotNull { col_idx: usize },
 }
 
 impl RowFilter {
@@ -121,11 +99,15 @@ impl RowFilter {
             Self::IsNotNull { col_idx } => {
                 !cell(*col_idx).eq_ignore_ascii_case("NULL") && !cell(*col_idx).is_empty()
             }
-            Self::Gt { col_idx, value } => compare(cell(*col_idx), value) == std::cmp::Ordering::Greater,
+            Self::Gt { col_idx, value } => {
+                compare(cell(*col_idx), value) == std::cmp::Ordering::Greater
+            }
             Self::Gte { col_idx, value } => {
                 compare(cell(*col_idx), value) != std::cmp::Ordering::Less
             }
-            Self::Lt { col_idx, value } => compare(cell(*col_idx), value) == std::cmp::Ordering::Less,
+            Self::Lt { col_idx, value } => {
+                compare(cell(*col_idx), value) == std::cmp::Ordering::Less
+            }
             Self::Lte { col_idx, value } => {
                 compare(cell(*col_idx), value) != std::cmp::Ordering::Greater
             }
@@ -399,7 +381,10 @@ pub fn iter_insert_rows(stmt: &str) -> InsertRowIter<'_> {
         .find("VALUES")
         .map(|pos| &stmt[pos + 6..])
         .unwrap_or("");
-    InsertRowIter { s: tail, done: tail.is_empty() }
+    InsertRowIter {
+        s: tail,
+        done: tail.is_empty(),
+    }
 }
 
 pub struct InsertRowIter<'a> {
@@ -426,7 +411,8 @@ impl<'a> Iterator for InsertRowIter<'a> {
         let (row, consumed) = parse_tuple(&self.s[i..])?;
         self.s = &self.s[i + consumed..];
         let mut j = 0usize;
-        while j < self.s.len() && (self.s.as_bytes()[j] == b',' || self.s.as_bytes()[j].is_ascii_whitespace())
+        while j < self.s.len()
+            && (self.s.as_bytes()[j] == b',' || self.s.as_bytes()[j].is_ascii_whitespace())
         {
             j += 1;
         }
@@ -604,7 +590,8 @@ mod tests {
 
     #[test]
     fn parses_create_and_insert() {
-        let stmt = "CREATE TABLE `users` (`id` INT NOT NULL, `email` VARCHAR(255), PRIMARY KEY (`id`));";
+        let stmt =
+            "CREATE TABLE `users` (`id` INT NOT NULL, `email` VARCHAR(255), PRIMARY KEY (`id`));";
         let t = parse_create_table(stmt).unwrap();
         assert_eq!(t.name, "users");
         assert_eq!(t.columns.len(), 2);

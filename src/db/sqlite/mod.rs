@@ -9,8 +9,8 @@ use crate::config::OmnicatConfig;
 use crate::db::dispatch::run_sql_query;
 use crate::db::options::DbOptions;
 use crate::db::report::{DbReport, MysqlDumpStats, TableInfo, TableSchema};
-use crate::inspect::query::build_query;
 use crate::detect::HandlerKind;
+use crate::inspect::query::build_query;
 
 pub fn run(path: &Path, opts: &DbOptions) -> Result<DbReport> {
     if let Some(sql) = &opts.query {
@@ -43,10 +43,12 @@ pub fn run(path: &Path, opts: &DbOptions) -> Result<DbReport> {
         }
         return Ok(DbReport::Tables { tables });
     }
-    Ok(DbReport::OverviewSqlite(crate::db::report::SqliteOverview {
-        path: path.display().to_string(),
-        tables: list_tables(path)?,
-    }))
+    Ok(DbReport::OverviewSqlite(
+        crate::db::report::SqliteOverview {
+            path: path.display().to_string(),
+            tables: list_tables(path)?,
+        },
+    ))
 }
 
 fn run_sqlite_query(path: &Path, opts: &DbOptions, sql: &str) -> Result<DbReport> {
@@ -85,7 +87,9 @@ fn list_tables(path: &Path) -> Result<Vec<TableInfo>> {
     let mut out = Vec::new();
     for name in names {
         let count: i64 = conn
-            .query_row(&format!("SELECT COUNT(*) FROM \"{name}\""), [], |r| r.get(0))
+            .query_row(&format!("SELECT COUNT(*) FROM \"{name}\""), [], |r| {
+                r.get(0)
+            })
             .unwrap_or(0);
         out.push(TableInfo {
             name,
@@ -101,7 +105,9 @@ fn list_schemas(path: &Path) -> Result<Vec<TableSchema>> {
     let mut stmt = conn.prepare(
         "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
     )?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
     let mut out = Vec::new();
     for r in rows {
         let (name, sql) = r?;
@@ -136,7 +142,11 @@ fn parse_create_table_columns(sql: &str) -> Vec<crate::db::report::ColumnInfo> {
                 return None;
             }
             let mut words = p.split_whitespace();
-            let name = words.next()?.trim_matches('"').trim_matches('`').to_string();
+            let name = words
+                .next()?
+                .trim_matches('"')
+                .trim_matches('`')
+                .to_string();
             let type_name = words.collect::<Vec<_>>().join(" ");
             Some(crate::db::report::ColumnInfo {
                 name,

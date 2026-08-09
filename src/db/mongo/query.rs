@@ -39,7 +39,10 @@ pub fn parse_mongo_query(raw: &str, table: Option<&str>) -> Result<MongoQuerySpe
                 .get("filter")
                 .cloned()
                 .unwrap_or(Value::Object(serde_json::Map::new()));
-            let limit = obj.get("limit").and_then(|l| l.as_u64()).map(|n| n as usize);
+            let limit = obj
+                .get("limit")
+                .and_then(|l| l.as_u64())
+                .map(|n| n as usize);
             let projection = obj.get("projection").and_then(parse_projection);
             return Ok(MongoQuerySpec {
                 collection,
@@ -49,9 +52,9 @@ pub fn parse_mongo_query(raw: &str, table: Option<&str>) -> Result<MongoQuerySpe
             });
         }
     }
-    let collection = table
-        .map(str::to_string)
-        .ok_or_else(|| anyhow::anyhow!("--table COLLECTION required when --query is a filter object"))?;
+    let collection = table.map(str::to_string).ok_or_else(|| {
+        anyhow::anyhow!("--table COLLECTION required when --query is a filter object")
+    })?;
     Ok(MongoQuerySpec {
         collection,
         filter: v,
@@ -176,7 +179,10 @@ fn resolve_archive_ns(path: &Path, collection: &str) -> Result<String> {
         .ok_or_else(|| anyhow::anyhow!("collection '{collection}' not found in archive"))
 }
 
-fn flatten_doc(doc: &Document, projection: Option<&BTreeMap<String, i32>>) -> BTreeMap<String, String> {
+fn flatten_doc(
+    doc: &Document,
+    projection: Option<&BTreeMap<String, i32>>,
+) -> BTreeMap<String, String> {
     let json = crate::db::mongo::archive::doc_to_json_lines(doc);
     let v: Value = serde_json::from_str(&json).unwrap_or(Value::Null);
     let mut out = BTreeMap::new();

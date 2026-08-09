@@ -148,7 +148,9 @@ pub fn sample_collection(path: &Path, coll_name: Option<&str>, n: usize) -> Resu
                     continue;
                 }
             }
-            out.push(crate::db::mongo::archive::doc_to_json_lines(&entry.document));
+            out.push(crate::db::mongo::archive::doc_to_json_lines(
+                &entry.document,
+            ));
             if out.len() >= n {
                 break;
             }

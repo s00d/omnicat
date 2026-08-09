@@ -17,16 +17,16 @@ pub struct ArchiveDoc {
 pub fn stream_archive(path: &Path) -> Result<impl Iterator<Item = Result<ArchiveDoc>>> {
     let reader = open_reader(path, true).context("open archive")?;
     let mut bson = BsonReader::new(std::io::BufReader::with_capacity(1024 * 1024, reader));
-    Ok(std::iter::from_fn(move || match read_archive_entry(&mut bson) {
-        Ok(Some(v)) => Some(Ok(v)),
-        Ok(None) => None,
-        Err(e) => Some(Err(e)),
+    Ok(std::iter::from_fn(move || {
+        match read_archive_entry(&mut bson) {
+            Ok(Some(v)) => Some(Ok(v)),
+            Ok(None) => None,
+            Err(e) => Some(Err(e)),
+        }
     }))
 }
 
-fn read_archive_entry<R: std::io::Read>(
-    reader: &mut BsonReader<R>,
-) -> Result<Option<ArchiveDoc>> {
+fn read_archive_entry<R: std::io::Read>(reader: &mut BsonReader<R>) -> Result<Option<ArchiveDoc>> {
     let Some(doc) = reader.next_document()? else {
         return Ok(None);
     };
@@ -100,9 +100,7 @@ fn bson_to_json_value(b: &Bson) -> serde_json::Value {
         Bson::Int64(v) => serde_json::json!(v),
         Bson::Double(v) => serde_json::json!(v),
         Bson::String(v) => serde_json::Value::String(v.clone()),
-        Bson::Array(a) => {
-            serde_json::Value::Array(a.iter().map(bson_to_json_value).collect())
-        }
+        Bson::Array(a) => serde_json::Value::Array(a.iter().map(bson_to_json_value).collect()),
         Bson::Document(d) => {
             let mut map = serde_json::Map::new();
             for (k, v) in d {

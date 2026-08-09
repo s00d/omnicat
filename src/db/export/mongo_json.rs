@@ -31,9 +31,7 @@ pub fn run(path: &Path, opts: &DbOptions) -> Result<DbReport> {
             bytes: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
         };
         if opts.tables || opts.stats {
-            return Ok(DbReport::Tables {
-                tables: vec![info],
-            });
+            return Ok(DbReport::Tables { tables: vec![info] });
         }
     }
     Ok(DbReport::OverviewMongoDump(MongoDumpOverview {
@@ -78,7 +76,11 @@ fn run_jsonl_query(path: &Path, opts: &DbOptions, raw: &str) -> Result<DbReport>
             }
             let row: Vec<String> = columns
                 .iter()
-                .map(|c| map.get(c).map(|x| x.to_string()).unwrap_or_else(|| "NULL".into()))
+                .map(|c| {
+                    map.get(c)
+                        .map(|x| x.to_string())
+                        .unwrap_or_else(|| "NULL".into())
+                })
                 .collect();
             rows.push(row);
         }

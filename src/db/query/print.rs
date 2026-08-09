@@ -59,7 +59,11 @@ pub fn render_sql_inserts(source_sql: &str, report: &QueryResultReport) -> Resul
         .rows
         .iter()
         .map(|row| {
-            let vals = row.iter().map(|v| sql_literal(v)).collect::<Vec<_>>().join(", ");
+            let vals = row
+                .iter()
+                .map(|v| sql_literal(v))
+                .collect::<Vec<_>>()
+                .join(", ");
             format!("({vals})")
         })
         .collect::<Vec<_>>()

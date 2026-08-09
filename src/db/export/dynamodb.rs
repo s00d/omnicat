@@ -11,7 +11,9 @@ use crate::db::report::{DbReport, DynamoDbExportOverview, TableInfo};
 
 pub fn run(path: &Path, opts: &DbOptions) -> Result<DbReport> {
     if opts.query.is_some() {
-        bail!("DynamoDB export: --query not in V1; use Parquet path with future DataFusion support");
+        bail!(
+            "DynamoDB export: --query not in V1; use Parquet path with future DataFusion support"
+        );
     }
     if opts.find.is_some() || opts.sample.is_some() {
         bail!("DynamoDB export supports overview, --tables, --stats only");

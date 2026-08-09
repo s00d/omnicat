@@ -97,7 +97,10 @@ fn json_eq(field: &Bson, val: &Value) -> bool {
         (Bson::Boolean(a), Value::Bool(b)) => a == b,
         (Bson::Int32(a), Value::Number(n)) => n.as_i64() == Some(*a as i64),
         (Bson::Int64(a), Value::Number(n)) => n.as_i64() == Some(*a),
-        (Bson::Double(a), Value::Number(n)) => n.as_f64().map(|f| (f - a).abs() < f64::EPSILON).unwrap_or(false),
+        (Bson::Double(a), Value::Number(n)) => n
+            .as_f64()
+            .map(|f| (f - a).abs() < f64::EPSILON)
+            .unwrap_or(false),
         (Bson::String(a), Value::String(b)) => a == b,
         (Bson::ObjectId(oid), Value::String(s)) => oid.to_hex() == *s,
         _ => false,

@@ -134,7 +134,11 @@ fn db_mysql_gz_query_if_present() {
         ])
         .output()
         .expect("gz query");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(String::from_utf8_lossy(&out.stdout).contains('3'));
 }
 
@@ -219,7 +223,11 @@ fn db_print_query_emits_runnable_sql() {
         ])
         .output()
         .expect("print-query");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("INSERT INTO `users` (`email`) VALUES"));
     assert!(stdout.contains("'a@example.com'"));
@@ -243,7 +251,11 @@ fn db_mongo_dump_query_if_fixture_present() {
         ])
         .output()
         .expect("mongo query");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(String::from_utf8_lossy(&out.stdout).contains("b@example.com"));
 }
 
@@ -278,7 +290,11 @@ fn db_sqlite_query_if_fixture_present() {
         ])
         .output()
         .expect("sqlite query");
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("INSERT INTO"));
     assert!(stdout.contains("b@example.com"));

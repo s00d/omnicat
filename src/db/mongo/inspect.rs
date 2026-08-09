@@ -4,9 +4,11 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::db::mongo::metadata::schema_for_collection;
-use crate::db::mongo::overview::{dump_find, dump_overview, dump_stats, dump_tables, sample_collection};
 use crate::db::mongo::detect::list_collections;
+use crate::db::mongo::metadata::schema_for_collection;
+use crate::db::mongo::overview::{
+    dump_find, dump_overview, dump_stats, dump_tables, sample_collection,
+};
 use crate::db::options::DbOptions;
 use crate::db::report::{DbReport, KeySample};
 
@@ -43,7 +45,9 @@ pub fn dispatch(path: &Path, opts: &DbOptions) -> Result<DbReport> {
     if opts.tables {
         let mut tables = dump_tables(path)?;
         if let Some(t) = &opts.table {
-            tables.retain(|ti| ti.name.eq_ignore_ascii_case(t) || ti.name.ends_with(&format!(".{t}")));
+            tables.retain(|ti| {
+                ti.name.eq_ignore_ascii_case(t) || ti.name.ends_with(&format!(".{t}"))
+            });
         }
         return Ok(DbReport::Tables { tables });
     }

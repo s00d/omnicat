@@ -31,9 +31,8 @@ pub fn run(path: &Path, opts: &DbOptions) -> Result<DbReport> {
 
 fn inspect_snapshot(path: &Path) -> Result<ElasticsearchSnapshotOverview> {
     let mut indices = Vec::new();
-    let mut warnings = vec![
-        "Elasticsearch snapshot: metadata only — no index restore or query".into(),
-    ];
+    let mut warnings =
+        vec!["Elasticsearch snapshot: metadata only — no index restore or query".into()];
     let indices_dir = path.join("indices");
     if indices_dir.is_dir() {
         for ent in fs::read_dir(&indices_dir)?.flatten() {

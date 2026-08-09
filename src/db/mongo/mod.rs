@@ -25,10 +25,10 @@ pub fn run_datadir(path: &Path, opts: &DbOptions) -> Result<DbReport> {
     if opts.query.is_some() || opts.find.is_some() || opts.sample.is_some() {
         bail!("MongoDB WiredTiger datadir supports overview only (no --query/--find)");
     }
-    Ok(DbReport::OverviewMongoDatadir(crate::db::report::MongoDatadirOverview {
-        path: path.display().to_string(),
-        warnings: vec![
-            "WiredTiger datadir: metadata only — use mongodump for --query".into(),
-        ],
-    }))
+    Ok(DbReport::OverviewMongoDatadir(
+        crate::db::report::MongoDatadirOverview {
+            path: path.display().to_string(),
+            warnings: vec!["WiredTiger datadir: metadata only — use mongodump for --query".into()],
+        },
+    ))
 }

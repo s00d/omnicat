@@ -18,7 +18,8 @@ pub fn inspect_postgres_dump(path: &Path) -> Result<PostgresDumpOverview> {
     let pg_restore = match which::which("pg_restore") {
         Ok(p) => p,
         Err(_) => {
-            warnings.push("pg_restore not found; install PostgreSQL client tools for full TOC".into());
+            warnings
+                .push("pg_restore not found; install PostgreSQL client tools for full TOC".into());
             return Ok(PostgresDumpOverview {
                 path: path.display().to_string(),
                 format,
