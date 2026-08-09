@@ -4,11 +4,10 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
-use chrono::Datelike;
 
 use crate::io::{file_len, FileHandle, OpenOptions, ReadMode, DEFAULT_TAIL_LINES, HUGE_FILE_BYTES};
 use crate::log::aggregate::Aggregators;
-use crate::log::context::context_around_ts;
+use crate::log::context::{context_around_clock, context_around_ts};
 use crate::log::correlate::build_trace_report;
 use crate::log::filter::{apply_level_flag, parse_time_bound, parse_where, LogFilter};
 use crate::log::merge::{merge_files, scan_file_with_format, to_owned};
@@ -135,7 +134,7 @@ fn run_print(paths: &[PathBuf], opts: &LogOptions) -> Result<()> {
 
     let report = LogReport::Lines { lines: lines_out };
     let mut stdout = io::stdout().lock();
-    write_log_report(&report, opts.json, &mut stdout)?;
+    write_log_report(&report, opts.json, opts.allow_unsafe, &mut stdout)?;
     stdout.flush()?;
     Ok(())
 }
@@ -177,7 +176,7 @@ fn run_aggregate(paths: &[PathBuf], opts: &LogOptions) -> Result<()> {
     };
 
     let mut stdout = io::stdout().lock();
-    write_log_report(&report, opts.json, &mut stdout)?;
+    write_log_report(&report, opts.json, opts.allow_unsafe, &mut stdout)?;
     stdout.flush()?;
     Ok(())
 }
@@ -195,7 +194,7 @@ fn run_correlate(paths: &[PathBuf], opts: &LogOptions) -> Result<()> {
     let trace = build_trace_report(&id, &collected);
     let report = LogReport::Trace(trace);
     let mut stdout = io::stdout().lock();
-    write_log_report(&report, opts.json, &mut stdout)?;
+    write_log_report(&report, opts.json, opts.allow_unsafe, &mut stdout)?;
     stdout.flush()?;
     Ok(())
 }
@@ -229,32 +228,27 @@ fn run_context(paths: &[PathBuf], opts: &LogOptions) -> Result<()> {
         }
         Ok(())
     })?;
-    let lines = match parse_around_time(around).or_else(|| parse_time_bound(around)) {
-        Some(target) => context_around_ts(&records, target, window),
-        None => bail!("could not parse --around time: {around}"),
+    let lines = if let Some(clock) = parse_around_clock(around) {
+        context_around_clock(&records, clock, window)
+    } else if let Some(target) = parse_time_bound(around) {
+        context_around_ts(&records, target, window)
+    } else {
+        bail!("could not parse --around time: {around}");
     };
     let report = LogReport::Context { lines };
     let mut stdout = io::stdout().lock();
-    write_log_report(&report, opts.json, &mut stdout)?;
+    write_log_report(&report, opts.json, opts.allow_unsafe, &mut stdout)?;
     stdout.flush()?;
     Ok(())
 }
 
-/// Parse `HH:MM:SS` or `HH:MM` for --around (matched against record timestamps).
-fn parse_around_time(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
-    use chrono::{NaiveDate, NaiveTime, Utc};
+/// Parse `HH:MM:SS` or `HH:MM` for --around (matched by clock, any date).
+fn parse_around_clock(s: &str) -> Option<chrono::NaiveTime> {
+    use chrono::NaiveTime;
     let s = s.trim();
-    if let Ok(t) = NaiveTime::parse_from_str(s, "%H:%M:%S") {
-        let today = Utc::now().date_naive();
-        return NaiveDate::from_ymd_opt(today.year(), today.month(), today.day())
-            .and_then(|d| d.and_time(t).and_local_timezone(Utc).single());
-    }
-    if let Ok(t) = NaiveTime::parse_from_str(s, "%H:%M") {
-        let today = Utc::now().date_naive();
-        return NaiveDate::from_ymd_opt(today.year(), today.month(), today.day())
-            .and_then(|d| d.and_time(t).and_local_timezone(Utc).single());
-    }
-    None
+    NaiveTime::parse_from_str(s, "%H:%M:%S")
+        .or_else(|_| NaiveTime::parse_from_str(s, "%H:%M"))
+        .ok()
 }
 
 fn detect_format_file(path: &Path) -> Result<LogFormat> {

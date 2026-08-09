@@ -1,6 +1,6 @@
 //! Context window around a timestamp or error line.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveTime, Timelike, Utc};
 
 use crate::log::record::LogRecord;
 
@@ -15,7 +15,6 @@ pub fn context_around_ts(
     target: DateTime<Utc>,
     window: usize,
 ) -> Vec<ContextLine> {
-    let _idx = 0usize;
     let mut best = None;
     for (i, rec) in records.iter().enumerate() {
         if let Some(ts) = rec.timestamp {
@@ -25,7 +24,39 @@ pub fn context_around_ts(
             }
         }
     }
-    let Some((center, _)) = best else {
+    window_around(records, best.map(|(i, _)| i), window)
+}
+
+/// Match `HH:MM[:SS]` against record clock times (date-agnostic).
+/// Absolute "today + clock" matching picks the wrong center for historical logs.
+pub fn context_around_clock(
+    records: &[LogRecord<'_>],
+    target: NaiveTime,
+    window: usize,
+) -> Vec<ContextLine> {
+    let target_secs = tod_secs(target);
+    let mut best = None;
+    for (i, rec) in records.iter().enumerate() {
+        if let Some(ts) = rec.timestamp {
+            let diff = tod_secs(ts.time()).abs_diff(target_secs);
+            if best.is_none_or(|(_, d)| diff < d) {
+                best = Some((i, diff));
+            }
+        }
+    }
+    window_around(records, best.map(|(i, _)| i), window)
+}
+
+fn tod_secs(t: NaiveTime) -> u32 {
+    t.num_seconds_from_midnight()
+}
+
+fn window_around(
+    records: &[LogRecord<'_>],
+    center: Option<usize>,
+    window: usize,
+) -> Vec<ContextLine> {
+    let Some(center) = center else {
         return Vec::new();
     };
     let start = center.saturating_sub(window);

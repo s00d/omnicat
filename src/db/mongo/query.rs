@@ -103,7 +103,7 @@ pub fn run_mongo_query(path: &Path, opts: &DbOptions, raw: &str) -> Result<DbRep
 
 fn execute_query(path: &Path, spec: &MongoQuerySpec) -> Result<QueryResultReport> {
     let limit = spec.limit.unwrap_or(usize::MAX);
-    let mut rows = Vec::new();
+    let mut rows: Vec<Vec<Option<String>>> = Vec::new();
     let mut columns: Vec<String> = Vec::new();
     let mut scanned = 0u64;
     let mut matched_count = 0usize;
@@ -120,12 +120,12 @@ fn execute_query(path: &Path, spec: &MongoQuerySpec) -> Result<QueryResultReport
         for k in flat.keys() {
             if !columns.contains(k) {
                 columns.push(k.clone());
+                for existing in &mut rows {
+                    existing.push(None);
+                }
             }
         }
-        let row: Vec<String> = columns
-            .iter()
-            .map(|c| flat.get(c).cloned().unwrap_or_else(|| "NULL".into()))
-            .collect();
+        let row: Vec<Option<String>> = columns.iter().map(|c| flat.get(c).cloned()).collect();
         rows.push(row);
         matched_count += 1;
         Ok(matched_count >= limit)

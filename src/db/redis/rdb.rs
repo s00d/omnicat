@@ -198,8 +198,9 @@ impl Formatter for StatsFormatter {
 fn infer_prefix(key: &str) -> String {
     if let Some(i) = key.find(':') {
         format!("{}:*", &key[..i])
-    } else if key.len() > 12 {
-        format!("{}…", &key[..8])
+    } else if key.chars().count() > 12 {
+        let prefix: String = key.chars().take(8).collect();
+        format!("{prefix}…")
     } else {
         key.to_string()
     }

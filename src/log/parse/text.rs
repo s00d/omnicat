@@ -22,21 +22,16 @@ pub fn parse_line<'a>(line: &'a str) -> LogRecord<'a> {
     rec.format = LogFormat::Text;
     let t = line.trim();
 
-    // ISO-ish timestamp prefix (RFC3339 or `YYYY-MM-DD HH:MM:SS`)
+    // ISO-ish timestamp prefix (RFC3339 token, or `YYYY-MM-DD HH:MM:SS`)
     if let Some(sp) = t.find(|c: char| c.is_ascii_whitespace()) {
         let prefix = &t[..sp];
         if let Ok(dt) = DateTime::parse_from_rfc3339(prefix) {
             rec.timestamp = Some(dt.with_timezone(&Utc));
-        } else if let Ok(nd) = chrono::NaiveDateTime::parse_from_str(prefix, "%Y-%m-%d %H:%M:%S") {
-            rec.timestamp = Some(nd.and_utc());
         }
-    } else if t.len() >= 19 {
-        if let Ok(dt) = DateTime::parse_from_rfc3339(&t[..19.min(t.len())]) {
-            rec.timestamp = Some(dt.with_timezone(&Utc));
-        } else if let Ok(nd) = chrono::NaiveDateTime::parse_from_str(
-            &t.chars().take(19).collect::<String>(),
-            "%Y-%m-%d %H:%M:%S",
-        ) {
+    }
+    if rec.timestamp.is_none() && t.len() >= 19 {
+        let naive = t.get(..19).unwrap_or("");
+        if let Ok(nd) = chrono::NaiveDateTime::parse_from_str(naive, "%Y-%m-%d %H:%M:%S") {
             rec.timestamp = Some(nd.and_utc());
         }
     }

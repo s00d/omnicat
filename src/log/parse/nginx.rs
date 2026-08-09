@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 
+use chrono::{DateTime, NaiveDateTime, Utc};
 use nom::bytes::complete::{tag, take_until, take_while, take_while1};
 use nom::character::complete::{digit1, space0, space1};
 use nom::combinator::{map_res, opt};
@@ -12,17 +13,24 @@ use crate::log::record::{LogFormat, LogRecord};
 
 pub fn looks_like_nginx(line: &str) -> bool {
     let t = line.trim();
-    t.contains(" - \"")
-        && t.contains('[')
+    t.contains('[')
         && t.contains(']')
+        && (t.contains(" - \"") || t.contains(" -\""))
         && (t.contains("GET ")
             || t.contains("POST ")
             || t.contains("PUT ")
-            || t.contains("DELETE "))
+            || t.contains("DELETE ")
+            || t.contains("\"GET ")
+            || t.contains("\"POST ")
+            || t.contains("\"PUT ")
+            || t.contains("\"DELETE "))
 }
 
 pub fn parse_line<'a>(line: &'a str) -> Option<LogRecord<'a>> {
-    let (_, parsed) = parse_nginx(line).ok()?;
+    let parsed = parse_nginx_combined(line)
+        .ok()
+        .map(|(_, p)| p)
+        .or_else(|| parse_nginx_timing(line).ok().map(|(_, p)| p))?;
     let mut rec = LogRecord::from_line(line);
     rec.format = LogFormat::Nginx;
     rec.client_ip = Some(Cow::Borrowed(parsed.ip));
@@ -30,6 +38,7 @@ pub fn parse_line<'a>(line: &'a str) -> Option<LogRecord<'a>> {
     rec.path = Some(Cow::Borrowed(parsed.url_path));
     rec.status = parsed.status_code;
     rec.duration_ms = parsed.response_time.map(|f| f as f64 * 1000.0);
+    rec.timestamp = parsed.timestamp;
     rec.message = Cow::Owned(format!(
         "{} {} {}",
         parsed.http_method,
@@ -52,20 +61,67 @@ struct ParsedNginx<'a> {
     url_path: &'a str,
     status_code: Option<u16>,
     response_time: Option<f32>,
+    timestamp: Option<DateTime<Utc>>,
 }
 
 fn parse_quoted(input: &str) -> nom::IResult<&str, &str> {
     delimited(tag("\""), take_until("\""), tag("\"")).parse(input)
 }
 
-fn parse_nginx(input: &str) -> nom::IResult<&str, ParsedNginx<'_>> {
+fn parse_nginx_time(ts: &str) -> Option<DateTime<Utc>> {
+    // Standard `$time_local`: 09/Aug/2026:12:42:17 +0000
+    DateTime::parse_from_str(ts, "%d/%b/%Y:%H:%M:%S %z")
+        .ok()
+        .map(|d| d.with_timezone(&Utc))
+        .or_else(|| {
+            NaiveDateTime::parse_from_str(ts, "%d/%b/%Y:%H:%M:%S")
+                .ok()
+                .map(|n| n.and_utc())
+        })
+}
+
+/// Standard combined: `IP - user [time] "METHOD path proto" status size "ref" "ua"`
+fn parse_nginx_combined(input: &str) -> nom::IResult<&str, ParsedNginx<'_>> {
+    let (input, ip) = take_while1(|c: char| !c.is_whitespace()).parse(input)?;
+    let (input, _) = space1(input)?;
+    let (input, _) = tag("-").parse(input)?;
+    let (input, _) = space1(input)?;
+    let (input, _) = take_while1(|c: char| !c.is_whitespace()).parse(input)?; // remote_user
+    let (input, _) = space1(input)?;
+    let (input, ts_raw) = delimited(tag("["), take_until("]"), tag("]")).parse(input)?;
+    let (input, _) = space1(input)?;
+    let (input, request_line) = parse_quoted(input)?;
+    let (input, _) = space1(input)?;
+    let (input, status_code) = opt(map_res(digit1, |s: &str| s.parse::<u16>())).parse(input)?;
+    let (input, _) = space0(input)?;
+    let (input, _) = opt(map_res(digit1, |s: &str| s.parse::<u64>())).parse(input)?;
+    let (input, _) = space0(input)?;
+    let (input, _) = opt(parse_quoted).parse(input)?;
+    let (input, _) = space0(input)?;
+    let (input, _) = opt(parse_quoted).parse(input)?;
+    let (_, (method, url)) = parse_request(request_line).unwrap_or((request_line, ("", "")));
+    Ok((
+        input,
+        ParsedNginx {
+            ip,
+            http_method: if method.is_empty() { "GET" } else { method },
+            url_path: if url.is_empty() { request_line } else { url },
+            status_code,
+            response_time: None,
+            timestamp: parse_nginx_time(ts_raw),
+        },
+    ))
+}
+
+/// Project timing-extended layout (legacy): `IP - "…" [time] <float> "method" "request" …`
+fn parse_nginx_timing(input: &str) -> nom::IResult<&str, ParsedNginx<'_>> {
     let (input, ip) = take_while1(|c: char| !c.is_whitespace()).parse(input)?;
     let (input, _) = space0(input)?;
     let (input, _) = tag("-").parse(input)?;
     let (input, _) = space0(input)?;
     let (input, _) = parse_quoted(input)?;
     let (input, _) = space0(input)?;
-    let (input, _) = delimited(tag("["), take_until("]"), tag("]")).parse(input)?;
+    let (input, ts_raw) = delimited(tag("["), take_until("]"), tag("]")).parse(input)?;
     let (input, _) = space0(input)?;
     let (input, _) = map_res(
         take_while1(|c: char| c.is_ascii_digit() || c == '.'),
@@ -101,6 +157,7 @@ fn parse_nginx(input: &str) -> nom::IResult<&str, ParsedNginx<'_>> {
             url_path: if url.is_empty() { request_line } else { url },
             status_code,
             response_time,
+            timestamp: parse_nginx_time(ts_raw),
         },
     ))
 }

@@ -179,39 +179,54 @@ struct ParsedCommand {
 }
 
 fn parse_next_command(buf: &[u8]) -> Option<ParsedCommand> {
-    let text = String::from_utf8_lossy(buf);
-    let normalized = text.replace("\r\n", "\n");
-    let lines: Vec<&str> = normalized.split('\n').collect();
-    if lines.is_empty() || !lines[0].starts_with('*') {
+    // Parse RESP against raw bytes so CRLF framing keeps `consumed` accurate.
+    let mut i = 0usize;
+    if buf.get(i) != Some(&b'*') {
         return None;
     }
-    let count: usize = lines[0][1..].trim().parse().ok()?;
-    let mut parts = Vec::new();
-    let mut line_idx = 1usize;
-    let mut byte_offset = lines[0].len() + 1;
+    i += 1;
+    let (count, ni) = read_resp_int(buf, i)?;
+    i = ni;
+    let mut parts = Vec::with_capacity(count);
     for _ in 0..count {
-        if line_idx >= lines.len() {
+        if buf.get(i) != Some(&b'$') {
             return None;
         }
-        let len_line = lines[line_idx];
-        if !len_line.starts_with('$') {
-            return None;
+        i += 1;
+        let (len, ni) = read_resp_int(buf, i)?;
+        i = ni;
+        if i + len > buf.len() {
+            return None; // incomplete bulk payload
         }
-        byte_offset += len_line.len() + 1;
-        line_idx += 1;
-        if line_idx >= lines.len() {
-            return None;
-        }
-        let len: usize = len_line[1..].trim().parse().ok()?;
-        let payload = lines[line_idx];
-        parts.push(payload[..len.min(payload.len())].to_string());
-        byte_offset += payload.len() + 1;
-        line_idx += 1;
+        let payload = &buf[i..i + len];
+        parts.push(String::from_utf8_lossy(payload).into_owned());
+        i += len;
+        i = skip_crlf(buf, i)?;
     }
-    Some(ParsedCommand {
-        parts,
-        consumed: byte_offset.min(buf.len()),
-    })
+    Some(ParsedCommand { parts, consumed: i })
+}
+
+fn read_resp_int(buf: &[u8], mut i: usize) -> Option<(usize, usize)> {
+    let start = i;
+    while i < buf.len() && buf[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == start {
+        return None;
+    }
+    let n = std::str::from_utf8(&buf[start..i]).ok()?.parse().ok()?;
+    i = skip_crlf(buf, i)?;
+    Some((n, i))
+}
+
+fn skip_crlf(buf: &[u8], mut i: usize) -> Option<usize> {
+    if buf.get(i) == Some(&b'\r') {
+        i += 1;
+    }
+    if buf.get(i) != Some(&b'\n') {
+        return None;
+    }
+    Some(i + 1)
 }
 
 #[cfg(test)]

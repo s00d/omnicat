@@ -50,7 +50,7 @@ pub fn run(path: &Path, opts: &DbOptions) -> Result<DbReport> {
 fn run_jsonl_query(path: &Path, opts: &DbOptions, raw: &str) -> Result<DbReport> {
     let spec = parse_mongo_query(raw, opts.table.as_deref())?;
     let limit = spec.limit.unwrap_or(usize::MAX);
-    let mut rows = Vec::new();
+    let mut rows: Vec<Vec<Option<String>>> = Vec::new();
     let mut columns = Vec::new();
     let mut scanned = 0u64;
     let reader = open_reader(path, true)?;
@@ -72,15 +72,14 @@ fn run_jsonl_query(path: &Path, opts: &DbOptions, raw: &str) -> Result<DbReport>
             for k in map.keys() {
                 if !columns.contains(k) {
                     columns.push(k.clone());
+                    for existing in &mut rows {
+                        existing.push(None);
+                    }
                 }
             }
-            let row: Vec<String> = columns
+            let row: Vec<Option<String>> = columns
                 .iter()
-                .map(|c| {
-                    map.get(c)
-                        .map(|x| x.to_string())
-                        .unwrap_or_else(|| "NULL".into())
-                })
+                .map(|c| map.get(c).map(|x| x.to_string()))
                 .collect();
             rows.push(row);
         }
@@ -101,6 +100,9 @@ fn run_jsonl_query(path: &Path, opts: &DbOptions, raw: &str) -> Result<DbReport>
     }
     let mut out = std::io::stdout().lock();
     crate::db::query::write_query_output(&report, opts.output, &mut out)?;
+    if let Some(extract) = &opts.extract {
+        crate::db::query::write_extract(std::path::Path::new(extract), &report, opts.output)?;
+    }
     Ok(DbReport::Text { lines: Vec::new() })
 }
 

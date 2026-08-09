@@ -89,18 +89,16 @@ bson = "2.15"
 anydoc = "0.1.7"
 htmd = "0.5"
 roxmltree = "0.21"
+tempfile = "3"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["process"] }
-
-tempfile = "3"
 
 [dev-dependencies]
 assert_cmd = "2"
 insta = { version = "1", features = ["filters"] }
 portable-pty = "0.9"
 predicates = "3"
-tempfile = "3"
 
 [lints.rust]
 linker_messages = "allow"

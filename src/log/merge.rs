@@ -20,6 +20,8 @@ where
         return scan_file(paths[0], on_record);
     }
 
+    // Materialize then sort: callers (aggregates) need full ordered stream.
+    // Sort key keeps sub-second precision so interleaved JSON logs stay ordered.
     let mut all: Vec<(i64, usize, LogRecord<'static>)> = Vec::new();
     for (i, path) in paths.iter().enumerate() {
         let mut sample = Vec::new();
@@ -33,7 +35,7 @@ where
         let fmt = parse::detect_from_lines(&sample.iter().map(|s| s.as_str()).collect::<Vec<_>>());
         scan_file_collect(path, fmt, i, &mut all)?;
     }
-    all.sort_by_key(|(ts, order, _)| (*ts, *order));
+    all.sort_by_key(|(ts_ms, order, _)| (*ts_ms, *order));
     for (_, _, rec) in all {
         on_record(rec)?;
     }
@@ -82,8 +84,8 @@ fn scan_file_collect(
         let text = line.as_str().unwrap_or("");
         let mut rec = parse::parse_line_with_format(text, fmt);
         rec = rec.with_source(&path_str);
-        let ts = rec.timestamp.map(|t| t.timestamp()).unwrap_or(0);
-        out.push((ts, order, to_owned(rec)));
+        let ts_ms = rec.timestamp.map(|t| t.timestamp_millis()).unwrap_or(0);
+        out.push((ts_ms, order, to_owned(rec)));
         Ok(())
     })
 }

@@ -54,8 +54,9 @@ pub fn stream_collection_from_archive(
 ) -> Result<impl Iterator<Item = Result<Document>>> {
     let target = target_ns.to_string();
     let iter = stream_archive(path)?;
-    Ok(iter.filter_map(move |item| {
-        item.ok().and_then(|entry| {
+    Ok(iter.filter_map(move |item| match item {
+        Err(e) => Some(Err(e)),
+        Ok(entry) => {
             if entry.document.contains_key("metadata") {
                 return None;
             }
@@ -64,7 +65,7 @@ pub fn stream_collection_from_archive(
                 return None;
             }
             Some(Ok(entry.document))
-        })
+        }
     }))
 }
 

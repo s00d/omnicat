@@ -1,9 +1,9 @@
 name: CI
 
+# Auto-run on push/PR disabled — CI is expensive (matrix + release build).
+# Trigger manually via Actions → CI → Run workflow (workflow_dispatch).
 on:
-  push:
-    branches: [main, master]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   test-rust:

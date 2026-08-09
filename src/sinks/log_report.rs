@@ -4,18 +4,25 @@ use std::io::Write;
 
 use anyhow::Result;
 
+use crate::inspect::text::sanitize_text;
 use crate::log::report::LogReport;
 
-pub fn write_log_report(report: &LogReport, json: bool, out: &mut dyn Write) -> Result<()> {
+pub fn write_log_report(
+    report: &LogReport,
+    json: bool,
+    allow_unsafe: bool,
+    out: &mut dyn Write,
+) -> Result<()> {
     if json {
         serde_json::to_writer_pretty(&mut *out, report)?;
         writeln!(out)?;
         return Ok(());
     }
+    let s = |v: &str| sanitize_text(v, allow_unsafe);
     match report {
         LogReport::Lines { lines } => {
             for line in lines {
-                writeln!(out, "{line}")?;
+                writeln!(out, "{}", s(line))?;
             }
         }
         LogReport::Stats { counters } => {
@@ -41,7 +48,7 @@ pub fn write_log_report(report: &LogReport, json: bool, out: &mut dyn Write) -> 
                 let mut levels: Vec<_> = counters.levels.iter().collect();
                 levels.sort_by(|a, b| b.1.cmp(a.1));
                 for (k, v) in levels {
-                    writeln!(out, "{:<14} {}", k, v)?;
+                    writeln!(out, "{:<14} {}", s(k), v)?;
                 }
             }
             if !counters.services.is_empty() {
@@ -51,7 +58,7 @@ pub fn write_log_report(report: &LogReport, json: bool, out: &mut dyn Write) -> 
                 let mut svcs: Vec<_> = counters.services.iter().collect();
                 svcs.sort_by(|a, b| b.1.cmp(a.1));
                 for (k, v) in svcs.iter().take(20) {
-                    writeln!(out, "{:<14} {}", k, v)?;
+                    writeln!(out, "{:<14} {}", s(k), v)?;
                 }
             }
         }
@@ -62,10 +69,10 @@ pub fn write_log_report(report: &LogReport, json: bool, out: &mut dyn Write) -> 
             write!(out, "{}", rate.render())?;
         }
         LogReport::Top { field, items } => {
-            writeln!(out, "Top {field}")?;
+            writeln!(out, "Top {}", s(field))?;
             writeln!(out, "{}", "─".repeat(44))?;
             for (i, item) in items.iter().enumerate() {
-                writeln!(out, "{:>6}  {}", item.count, item.key)?;
+                writeln!(out, "{:>6}  {}", item.count, s(&item.key))?;
                 if i >= 49 {
                     break;
                 }
@@ -75,7 +82,7 @@ pub fn write_log_report(report: &LogReport, json: bool, out: &mut dyn Write) -> 
             writeln!(out, "Slow operations")?;
             writeln!(out, "{}", "─".repeat(44))?;
             for e in entries {
-                writeln!(out, "{:>7.2}ms  {}", e.duration_ms, e.label)?;
+                writeln!(out, "{:>7.2}ms  {}", e.duration_ms, s(&e.label))?;
             }
         }
         LogReport::Http { http } => {
@@ -89,20 +96,20 @@ pub fn write_log_report(report: &LogReport, json: bool, out: &mut dyn Write) -> 
                 writeln!(out)?;
                 writeln!(out, "Methods")?;
                 for (m, c) in &http.methods {
-                    writeln!(out, "{:<14} {}", m, c)?;
+                    writeln!(out, "{:<14} {}", s(m), c)?;
                 }
             }
         }
         LogReport::Trace(t) => {
-            writeln!(out, "Trace {}", t.id)?;
+            writeln!(out, "Trace {}", s(&t.id))?;
             for line in &t.lines {
                 if let Some(ref ts) = line.timestamp {
                     write!(out, "{ts} ")?;
                 }
                 if let Some(ref svc) = line.service {
-                    write!(out, "[{svc}] ")?;
+                    write!(out, "[{}] ", s(svc))?;
                 }
-                writeln!(out, "{}", line.message)?;
+                writeln!(out, "{}", s(&line.message))?;
             }
             if let Some(d) = t.total_duration_ms {
                 writeln!(out, "\nDuration: {:.2}ms", d)?;
@@ -111,11 +118,11 @@ pub fn write_log_report(report: &LogReport, json: bool, out: &mut dyn Write) -> 
         LogReport::Context { lines } => {
             for line in lines {
                 let mark = if line.marker { ">>" } else { "  " };
-                writeln!(out, "{mark} {}", line.text)?;
+                writeln!(out, "{mark} {}", s(&line.text))?;
             }
         }
         LogReport::Query { result } => {
-            write!(out, "{result}")?;
+            write!(out, "{}", s(result))?;
         }
     }
     Ok(())

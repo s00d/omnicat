@@ -69,10 +69,14 @@ fn hash_directory(path: &Path, display: &str, config: &OmnicatConfig) -> Result<
 
     let mut hasher = blake3::Hasher::new();
     let mut total_size = 0u64;
+    let mut truncated = false;
     for rel in &files {
         let abs = path.join(rel);
         let size = fs::metadata(&abs).map(|m| m.len()).unwrap_or(0);
         total_size = total_size.saturating_add(size);
+        if max.is_some_and(|m| size > m) {
+            truncated = true;
+        }
         let digests = hash_bytes_streaming(&abs, max)?;
         // Deterministic: relative path (posix) + blake3 of content
         hasher.update(rel.to_string_lossy().replace('\\', "/").as_bytes());
@@ -92,11 +96,13 @@ fn hash_directory(path: &Path, display: &str, config: &OmnicatConfig) -> Result<
         sha256: String::new(),
         sha512: String::new(),
         blake3: combined,
-        truncated: false,
+        truncated,
         entries: files.len() as u64,
-        note: Some(
-            "Directory digest is BLAKE3 over sorted relative paths + per-file BLAKE3".into(),
-        ),
+        note: Some(if truncated {
+            "Directory digest is BLAKE3 over sorted relative paths + per-file BLAKE3 (some files capped by max_bytes)".into()
+        } else {
+            "Directory digest is BLAKE3 over sorted relative paths + per-file BLAKE3".into()
+        }),
     })
 }
 

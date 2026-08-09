@@ -1,7 +1,7 @@
 //! DataFusion TableProvider over a MySQL dump table.
 
 use anyhow::{Context, Result};
-use arrow::array::{ArrayRef, Float64Array, Int64Array, StringArray};
+use arrow::array::{ArrayRef, Float64Array, Int64Array, StringArray, UInt64Array};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::record_batch::RecordBatch;
 use async_trait::async_trait;
@@ -151,7 +151,11 @@ pub async fn register_dump_tables_for_query(
 pub fn sql_type_to_arrow(sql: &str) -> DataType {
     let u = sql.to_ascii_uppercase();
     if u.contains("INT") && !u.contains("POINT") {
-        DataType::Int64
+        if u.contains("UNSIGNED") {
+            DataType::UInt64
+        } else {
+            DataType::Int64
+        }
     } else if u.contains("DOUBLE") || u.contains("FLOAT") || u.contains("DECIMAL") {
         DataType::Float64
     } else {
@@ -177,6 +181,21 @@ pub fn build_batch(schema: &SchemaRef, rows: &[Vec<String>]) -> Result<RecordBat
                     })
                     .collect();
                 arrays.push(Arc::new(Int64Array::from(vals)) as ArrayRef);
+            }
+            DataType::UInt64 => {
+                let vals: Vec<Option<u64>> = rows
+                    .iter()
+                    .map(|r| {
+                        r.get(ci).and_then(|s| {
+                            if s.eq_ignore_ascii_case("NULL") {
+                                None
+                            } else {
+                                s.parse().ok()
+                            }
+                        })
+                    })
+                    .collect();
+                arrays.push(Arc::new(UInt64Array::from(vals)) as ArrayRef);
             }
             DataType::Float64 => {
                 let vals: Vec<Option<f64>> = rows

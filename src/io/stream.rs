@@ -51,8 +51,19 @@ impl<R: Read> Iterator for LineIter<R> {
                 self.line_no += 1;
                 return Some(Ok((self.line_no, std::mem::take(&mut self.carry))));
             }
+            let want = match self.max_bytes {
+                Some(max) => {
+                    let left = max.saturating_sub(self.bytes_read);
+                    if left == 0 {
+                        self.eof = true;
+                        continue;
+                    }
+                    (left as usize).min(CHUNK)
+                }
+                None => CHUNK,
+            };
             self.buf.clear();
-            self.buf.resize(CHUNK, 0);
+            self.buf.resize(want, 0);
             let n = match self.reader.read(&mut self.buf) {
                 Ok(0) => {
                     self.eof = true;

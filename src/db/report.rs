@@ -131,7 +131,8 @@ pub struct ElasticsearchSnapshotOverview {
 #[derive(Debug, Clone, Serialize)]
 pub struct QueryResultReport {
     pub columns: Vec<String>,
-    pub rows: Vec<Vec<String>>,
+    /// `None` cell = SQL/BSON NULL (distinct from the string `"NULL"`).
+    pub rows: Vec<Vec<Option<String>>>,
     pub rows_scanned: u64,
     pub rows_matched: u64,
 }

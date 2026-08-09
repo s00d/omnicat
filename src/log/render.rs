@@ -23,17 +23,48 @@ pub fn render_and_sanitize(line: &str, allow_unsafe: bool) -> String {
 }
 
 pub fn line_matches_level(line: &str, level: &str) -> bool {
+    use crate::log::level::{level_matches, parse_level, parse_level_threshold, LogLevel};
+
     let trimmed = line.trim_end_matches(['\r', '\n']);
-    if let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(trimmed) {
-        if let Some(lvl) = json_log_level(&map) {
-            return lvl == *level || lvl.starts_with(level);
+    let record_level = if let Ok(serde_json::Value::Object(map)) =
+        serde_json::from_str::<serde_json::Value>(trimmed)
+    {
+        json_log_level(&map).as_deref().and_then(parse_level)
+    } else {
+        None
+    };
+    let record_level = record_level.or_else(|| {
+        for token in trimmed.split_whitespace() {
+            if let Some(lvl) = parse_level(token.trim_matches(|c| c == '[' || c == ']' || c == ':'))
+            {
+                return Some(lvl);
+            }
         }
+        let lower = line.to_ascii_lowercase();
+        for (pat, lvl) in [
+            ("error", LogLevel::Error),
+            ("fatal", LogLevel::Fatal),
+            ("warn", LogLevel::Warn),
+            ("info", LogLevel::Info),
+            ("debug", LogLevel::Debug),
+            ("trace", LogLevel::Trace),
+        ] {
+            if lower.contains(pat) {
+                return Some(lvl);
+            }
+        }
+        None
+    });
+
+    if let Some((thr, plus)) = parse_level_threshold(level) {
+        return level_matches(record_level, thr, plus);
     }
     let lower = line.to_ascii_lowercase();
-    lower.contains(level)
-        || lower.contains(&format!("\"level\":\"{level}\""))
-        || lower.contains(&format!("\"level\": \"{level}\""))
-        || lower.contains(&format!("[{level}]"))
+    let needle = level.to_ascii_lowercase();
+    lower.contains(&needle)
+        || lower.contains(&format!("\"level\":\"{needle}\""))
+        || lower.contains(&format!("\"level\": \"{needle}\""))
+        || lower.contains(&format!("[{needle}]"))
 }
 
 pub fn is_stack_continuation(line: &str) -> bool {

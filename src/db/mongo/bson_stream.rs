@@ -24,17 +24,24 @@ impl<R: Read> BsonReader<R> {
 
     pub fn next_document(&mut self) -> Result<Option<Document>> {
         let mut len_buf = [0u8; 4];
-        match self.inner.read_exact(&mut len_buf) {
+        match self.inner.read_exact(&mut len_buf[..1]) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
             Err(e) => return Err(e.into()),
         }
+        self.inner
+            .read_exact(&mut len_buf[1..])
+            .context("read BSON length")?;
         self.bytes_read += 4;
         let len = i32::from_le_bytes(len_buf);
         if len < 5 {
             anyhow::bail!("invalid BSON length {len}");
         }
         let len = len as usize;
+        // BSON documents are capped at 16 MiB.
+        if len > 16 * 1024 * 1024 {
+            anyhow::bail!("BSON document length {len} exceeds 16 MiB");
+        }
         let mut buf = vec![0u8; len];
         buf[..4].copy_from_slice(&len_buf);
         self.inner

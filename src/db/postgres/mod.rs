@@ -76,12 +76,16 @@ fn parse_toc_list(
                 databases.push(name.to_string());
             }
         }
-        if desc.contains("TABLE DATA") || desc.contains("TABLE ") {
+        if desc.contains("TABLE DATA") || desc.contains(" TABLE ") || desc.starts_with("TABLE ") {
             let tokens: Vec<_> = desc.split_whitespace().collect();
-            if tokens.len() >= 3 {
-                let tbl = tokens[tokens.len() - 1].to_string();
-                let db = tokens.get(1).unwrap_or(&"public").to_string();
-                tables.push((db, tbl));
+            if let Some(pos) = tokens.iter().position(|t| *t == "TABLE") {
+                let mut after = &tokens[pos + 1..];
+                if after.first() == Some(&"DATA") {
+                    after = &after[1..];
+                }
+                if after.len() >= 2 {
+                    tables.push((after[0].to_string(), after[1].to_string()));
+                }
             }
         }
     }

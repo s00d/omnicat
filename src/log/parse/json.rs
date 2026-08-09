@@ -97,14 +97,15 @@ fn parse_ts(s: &str) -> Option<DateTime<Utc>> {
 
 fn parse_duration(s: &str) -> Option<f64> {
     let s = s.trim();
+    let finite = |v: f64| v.is_finite().then_some(v);
     if let Ok(v) = s.parse::<f64>() {
-        return Some(v);
+        return finite(v);
     }
     if let Some(num) = s.strip_suffix("ms") {
-        return num.parse().ok();
+        return num.parse().ok().and_then(finite);
     }
     if let Some(num) = s.strip_suffix('s') {
-        return num.parse::<f64>().ok().map(|v| v * 1000.0);
+        return num.parse::<f64>().ok().and_then(finite).map(|v| v * 1000.0);
     }
     None
 }

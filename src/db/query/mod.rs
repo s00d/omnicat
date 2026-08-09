@@ -82,15 +82,19 @@ pub fn batches_to_report(
     })
 }
 
-fn array_value_at(col: &dyn Array, idx: usize) -> String {
+fn array_value_at(col: &dyn Array, idx: usize) -> Option<String> {
     if col.is_null(idx) {
-        return "NULL".into();
+        return None;
     }
-    match col.data_type() {
+    Some(match col.data_type() {
         DataType::Utf8 => col.as_string::<i32>().value(idx).to_string(),
         DataType::LargeUtf8 => col.as_string::<i64>().value(idx).to_string(),
         DataType::Int64 => col
             .as_primitive::<arrow::datatypes::Int64Type>()
+            .value(idx)
+            .to_string(),
+        DataType::UInt64 => col
+            .as_primitive::<arrow::datatypes::UInt64Type>()
             .value(idx)
             .to_string(),
         DataType::Float64 => col
@@ -98,6 +102,17 @@ fn array_value_at(col: &dyn Array, idx: usize) -> String {
             .value(idx)
             .to_string(),
         other => format!("{other:?}"),
+    })
+}
+
+fn cell_display(v: &Option<String>) -> String {
+    v.clone().unwrap_or_else(|| "NULL".into())
+}
+
+fn cell_json(v: &Option<String>) -> serde_json::Value {
+    match v {
+        None => serde_json::Value::Null,
+        Some(s) => serde_json::Value::String(s.clone()),
     }
 }
 
@@ -107,28 +122,40 @@ pub fn write_query_output(
     out: &mut dyn std::io::Write,
 ) -> Result<()> {
     match format {
-        DbOutputFormat::Json | DbOutputFormat::Jsonl => {
+        DbOutputFormat::Jsonl => {
             for row in &report.rows {
                 let obj: serde_json::Map<String, serde_json::Value> = report
                     .columns
                     .iter()
                     .zip(row.iter())
-                    .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+                    .map(|(k, v)| (k.clone(), cell_json(v)))
                     .collect();
-                if format == DbOutputFormat::Jsonl {
-                    serde_json::to_writer(&mut *out, &obj)?;
-                    writeln!(out)?;
-                } else {
-                    serde_json::to_writer_pretty(&mut *out, &obj)?;
-                    writeln!(out)?;
-                }
+                serde_json::to_writer(&mut *out, &obj)?;
+                writeln!(out)?;
             }
+        }
+        DbOutputFormat::Json => {
+            let rows: Vec<serde_json::Map<String, serde_json::Value>> = report
+                .rows
+                .iter()
+                .map(|row| {
+                    report
+                        .columns
+                        .iter()
+                        .zip(row.iter())
+                        .map(|(k, v)| (k.clone(), cell_json(v)))
+                        .collect()
+                })
+                .collect();
+            serde_json::to_writer_pretty(&mut *out, &rows)?;
+            writeln!(out)?;
         }
         DbOutputFormat::Csv => {
             let mut wtr = csv::Writer::from_writer(out);
             wtr.write_record(&report.columns)?;
             for row in &report.rows {
-                wtr.write_record(row)?;
+                let cells: Vec<String> = row.iter().map(cell_display).collect();
+                wtr.write_record(&cells)?;
             }
             wtr.flush()?;
         }

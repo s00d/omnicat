@@ -17,8 +17,8 @@ pub fn doc_matches_filter(doc: &Document, filter: &Value) -> bool {
             }
             continue;
         }
-        let field = doc_get(doc, key);
-        if !value_matches(&field, cond) {
+        let field = doc_get_opt(doc, key);
+        if !value_matches(field.as_ref(), cond) {
             return false;
         }
     }
@@ -37,10 +37,10 @@ fn match_top_operator(doc: &Document, op: &str, val: &Value) -> bool {
     }
 }
 
-fn value_matches(field: &Bson, cond: &Value) -> bool {
+fn value_matches(field: Option<&Bson>, cond: &Value) -> bool {
     if let Some(obj) = cond.as_object() {
         if obj.is_empty() {
-            return !field_is_null(field);
+            return field.is_some_and(|f| !field_is_null(f));
         }
         for (op, val) in obj {
             if !op_matches(field, op, val) {
@@ -49,26 +49,38 @@ fn value_matches(field: &Bson, cond: &Value) -> bool {
         }
         return true;
     }
-    json_eq(field, cond)
+    match field {
+        Some(f) => json_eq(f, cond),
+        None => cond.is_null(),
+    }
 }
 
-fn op_matches(field: &Bson, op: &str, val: &Value) -> bool {
+fn op_matches(field: Option<&Bson>, op: &str, val: &Value) -> bool {
     match op {
-        "$eq" => json_eq(field, val),
-        "$ne" => !json_eq(field, val),
-        "$gt" => compare(field, val) == std::cmp::Ordering::Greater,
-        "$gte" => compare(field, val) != std::cmp::Ordering::Less,
-        "$lt" => compare(field, val) == std::cmp::Ordering::Less,
-        "$lte" => compare(field, val) != std::cmp::Ordering::Greater,
+        "$eq" => field.is_some_and(|f| json_eq(f, val)),
+        "$ne" => !field.is_some_and(|f| json_eq(f, val)),
+        "$gt" => matches!(compare(field, val), Some(std::cmp::Ordering::Greater)),
+        "$gte" => matches!(
+            compare(field, val),
+            Some(std::cmp::Ordering::Greater | std::cmp::Ordering::Equal)
+        ),
+        "$lt" => matches!(compare(field, val), Some(std::cmp::Ordering::Less)),
+        "$lte" => matches!(
+            compare(field, val),
+            Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
+        ),
         "$in" => val
             .as_array()
-            .is_some_and(|a| a.iter().any(|v| json_eq(field, v))),
+            .is_some_and(|a| field.is_some_and(|f| a.iter().any(|v| json_eq(f, v)))),
         "$exists" => {
             let want = val.as_bool().unwrap_or(true);
-            field_is_null(field) != want
+            field.is_some() == want
         }
         "$regex" => {
-            let s = bson_as_str(field);
+            let Some(f) = field else {
+                return false;
+            };
+            let s = bson_as_str(f);
             val.as_str()
                 .is_some_and(|pat| s.contains(pat) || glob_simple(pat, &s))
         }
@@ -76,15 +88,15 @@ fn op_matches(field: &Bson, op: &str, val: &Value) -> bool {
     }
 }
 
-fn doc_get(doc: &Document, path: &str) -> Bson {
+fn doc_get_opt(doc: &Document, path: &str) -> Option<Bson> {
     let mut cur = Bson::Document(doc.clone());
     for part in path.split('.') {
         cur = match cur {
-            Bson::Document(ref d) => d.get(part).cloned().unwrap_or(Bson::Null),
-            _ => Bson::Null,
+            Bson::Document(ref d) => d.get(part).cloned()?,
+            _ => return None,
         };
     }
-    cur
+    Some(cur)
 }
 
 fn field_is_null(b: &Bson) -> bool {
@@ -107,15 +119,14 @@ fn json_eq(field: &Bson, val: &Value) -> bool {
     }
 }
 
-fn compare(field: &Bson, val: &Value) -> std::cmp::Ordering {
+fn compare(field: Option<&Bson>, val: &Value) -> Option<std::cmp::Ordering> {
+    let field = field?;
     match (field, val) {
-        (Bson::Int32(a), Value::Number(n)) if let Some(b) = n.as_i64() => (*a as i64).cmp(&b),
-        (Bson::Int64(a), Value::Number(n)) if let Some(b) = n.as_i64() => a.cmp(&b),
-        (Bson::Double(a), Value::Number(n)) if let Some(b) = n.as_f64() => {
-            a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal)
-        }
-        (Bson::String(a), Value::String(b)) => a.cmp(b),
-        _ => std::cmp::Ordering::Equal,
+        (Bson::Int32(a), Value::Number(n)) => Some((*a as i64).cmp(&n.as_i64()?)),
+        (Bson::Int64(a), Value::Number(n)) => Some(a.cmp(&n.as_i64()?)),
+        (Bson::Double(a), Value::Number(n)) => a.partial_cmp(&n.as_f64()?),
+        (Bson::String(a), Value::String(b)) => Some(a.cmp(b)),
+        _ => None,
     }
 }
 
@@ -145,5 +156,19 @@ mod tests {
         let doc = bson::doc! {"status": "failed", "id": 1i32};
         let f = serde_json::json!({"status": "failed"});
         assert!(doc_matches_filter(&doc, &f));
+    }
+
+    #[test]
+    fn exists_true_matches_present_null() {
+        let doc = bson::doc! {"a": Bson::Null};
+        let f = serde_json::json!({"a": {"$exists": true}});
+        assert!(doc_matches_filter(&doc, &f));
+    }
+
+    #[test]
+    fn range_rejects_incomparable_types() {
+        let doc = bson::doc! {"n": 1i32};
+        let f = serde_json::json!({"n": {"$gt": "x"}});
+        assert!(!doc_matches_filter(&doc, &f));
     }
 }

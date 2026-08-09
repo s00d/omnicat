@@ -264,7 +264,11 @@ pub fn write_query_table(report: &QueryResultReport, out: &mut dyn Write) -> Res
             .collect::<Vec<_>>(),
     );
     for row in &report.rows {
-        t.add_row(row.iter().map(String::as_str).collect::<Vec<_>>());
+        t.add_row(
+            row.iter()
+                .map(|c| c.as_deref().unwrap_or("NULL"))
+                .collect::<Vec<_>>(),
+        );
     }
     write!(out, "{t}")?;
     Ok(())

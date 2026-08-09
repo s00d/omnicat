@@ -13,19 +13,32 @@ use crate::io::source::open_reader;
 
 pub fn dump_overview(path: &Path) -> Result<MongoDumpOverview> {
     if is_archive(path) {
-        let names = collection_names_from_archive(path)?;
-        let tables: Vec<TableInfo> = names
+        let mut counts: std::collections::BTreeMap<String, (u64, u64)> =
+            std::collections::BTreeMap::new();
+        let mut total_docs = 0u64;
+        for entry in stream_archive(path)? {
+            let entry = entry?;
+            if entry.document.contains_key("metadata") {
+                continue;
+            }
+            let ns = entry.namespace.unwrap_or_else(|| "unknown".into());
+            let e = counts.entry(ns).or_default();
+            e.0 += 1;
+            e.1 += bson::to_vec(&entry.document)
+                .map(|v| v.len() as u64)
+                .unwrap_or(0);
+            total_docs += 1;
+        }
+        let mut tables: Vec<TableInfo> = counts
             .into_iter()
-            .map(|n| TableInfo {
-                name: n,
-                rows: 0,
-                bytes: 0,
-            })
+            .map(|(name, (rows, bytes))| TableInfo { name, rows, bytes })
             .collect();
+        tables.sort_by_key(|t| std::cmp::Reverse(t.bytes));
+        tables.truncate(20);
         return Ok(MongoDumpOverview {
             path: path.display().to_string(),
             collections: tables.len() as u64,
-            documents: 0,
+            documents: total_docs,
             bytes_scanned: fs::metadata(path).map(|m| m.len()).unwrap_or(0),
             largest: tables,
         });

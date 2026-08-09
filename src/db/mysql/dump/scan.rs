@@ -107,12 +107,11 @@ impl DataSource for DumpScanSource {
                         if tname != st.table {
                             continue;
                         }
+                        // Exhaust the INSERT: breaking early drops remaining tuples
+                        // when the next poll advances DumpReader past this statement.
                         for row in iter_insert_rows(&stmt) {
                             if RowFilter::all_match(&st.filters, &fs, &row) {
                                 st.row_buf.push(row);
-                            }
-                            if st.row_buf.len() >= BATCH_SIZE {
-                                break;
                             }
                             if st.fetch.is_some_and(|n| {
                                 st.rows_emitted + st.row_buf.len() as u64 >= n as u64
@@ -293,10 +292,28 @@ fn collect_tables_from_query(q: &sqlparser::ast::Query, out: &mut Vec<String>) {
     use sqlparser::ast::*;
     if let SetExpr::Select(s) = q.body.as_ref() {
         for item in &s.from {
-            if let TableFactor::Table { name, .. } = &item.relation {
-                out.push(normalize_table_name(name));
+            push_table_factor(&item.relation, out);
+            for join in &item.joins {
+                push_table_factor(&join.relation, out);
             }
         }
+    }
+}
+
+fn push_table_factor(factor: &sqlparser::ast::TableFactor, out: &mut Vec<String>) {
+    use sqlparser::ast::*;
+    match factor {
+        TableFactor::Table { name, .. } => out.push(normalize_table_name(name)),
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => {
+            push_table_factor(&table_with_joins.relation, out);
+            for join in &table_with_joins.joins {
+                push_table_factor(&join.relation, out);
+            }
+        }
+        TableFactor::Derived { subquery, .. } => collect_tables_from_query(subquery, out),
+        _ => {}
     }
 }
 

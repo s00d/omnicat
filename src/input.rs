@@ -7,6 +7,31 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 use zip::ZipArchive;
 
+/// Reject `..`, absolute, and other paths that would escape `base` when joined.
+fn safe_rel_path(base: &Path, rel: &str) -> Result<PathBuf> {
+    let rel = rel.replace('\\', "/");
+    if rel.is_empty() || rel.starts_with('/') || rel.contains('\0') {
+        bail!("unsafe archive path: {rel}");
+    }
+    for part in rel.split('/') {
+        if part == ".." {
+            bail!("unsafe archive path: {rel}");
+        }
+    }
+    let dest = base.join(&rel);
+    let base_canon = base.canonicalize().unwrap_or_else(|_| base.to_path_buf());
+    // Dest may not exist yet — canonicalize parent + append file name.
+    let parent = dest.parent().unwrap_or(base);
+    fs::create_dir_all(parent)?;
+    let parent_canon = parent
+        .canonicalize()
+        .unwrap_or_else(|_| parent.to_path_buf());
+    if !parent_canon.starts_with(&base_canon) {
+        bail!("archive path escapes extract dir: {rel}");
+    }
+    Ok(dest)
+}
+
 /// Resolved reference to a file or a virtual path inside an archive.
 #[derive(Debug)]
 pub struct InputRef {
@@ -220,7 +245,7 @@ fn unpack_one_tar_entry<R: std::io::Read>(
     if rel.is_empty() {
         return Ok(true);
     }
-    let dest = out_dir.join(&rel);
+    let dest = safe_rel_path(out_dir, &rel)?;
     if ent.header().entry_type().is_dir() {
         fs::create_dir_all(&dest)?;
     } else {
@@ -305,7 +330,7 @@ fn extract_zip(archive: &Path, entry: &str) -> Result<(PathBuf, Option<tempfile:
             if rel.is_empty() {
                 continue;
             }
-            let dest = out_dir.join(&rel);
+            let dest = safe_rel_path(&out_dir, &rel)?;
             if zf.is_dir() || name.ends_with('/') {
                 fs::create_dir_all(&dest)?;
             } else {
@@ -338,9 +363,9 @@ fn extract_zip(archive: &Path, entry: &str) -> Result<(PathBuf, Option<tempfile:
     let mut zf = zip.by_index(index)?;
     let file_name = Path::new(entry)
         .file_name()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("extracted"));
-    let dest = temp.path().join(file_name);
+        .and_then(|n| n.to_str())
+        .unwrap_or("extracted");
+    let dest = safe_rel_path(temp.path(), file_name)?;
     let mut out = fs::File::create(&dest)?;
     std::io::copy(&mut zf, &mut out)?;
     out.flush()?;

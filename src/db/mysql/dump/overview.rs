@@ -124,11 +124,8 @@ pub fn dump_schema(path: &Path) -> Result<Vec<TableSchema>> {
     while let Some(stmt) = reader.next_statement()? {
         if let Some(def) = parse_create_table(&stmt) {
             defs.insert(def.name.clone(), def);
-            continue;
         }
-        if parse_insert_table(&stmt).is_some() {
-            break;
-        }
+        // Keep scanning: CREATE TABLE may appear after earlier INSERT blocks.
     }
     Ok(schemas_from_create(&defs))
 }

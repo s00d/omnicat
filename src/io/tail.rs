@@ -49,13 +49,12 @@ pub fn tail_lines(
 
         let mut start = 0usize;
         for nl in memchr_iter(b'\n', &carry) {
-            if nl > start {
-                let mut line = carry[start..nl].to_vec();
-                if line.last() == Some(&b'\r') {
-                    line.pop();
-                }
-                lines_found.push(line);
+            // `nl == start` is a blank line — still count it for --tail.
+            let mut line = carry[start..nl].to_vec();
+            if line.last() == Some(&b'\r') {
+                line.pop();
             }
+            lines_found.push(line);
             start = nl + 1;
         }
         carry = carry[start..].to_vec();

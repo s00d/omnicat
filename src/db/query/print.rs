@@ -61,7 +61,7 @@ pub fn render_sql_inserts(source_sql: &str, report: &QueryResultReport) -> Resul
         .map(|row| {
             let vals = row
                 .iter()
-                .map(|v| sql_literal(v))
+                .map(|v| sql_literal(v.as_deref()))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("({vals})")
@@ -88,7 +88,13 @@ pub fn render_mongo_inserts(collection: &str, report: &QueryResultReport) -> Str
                 .columns
                 .iter()
                 .zip(row.iter())
-                .map(|(col, val)| format!("{col:?}: {}", json_literal(val)))
+                .filter_map(|(col, val)| {
+                    // Omit absent fields so insertMany does not invent nulls.
+                    let Some(v) = val else {
+                        return None;
+                    };
+                    Some(format!("{col:?}: {}", json_literal(v)))
+                })
                 .collect();
             format!("{{{}}}", parts.join(", "))
         })
@@ -104,28 +110,20 @@ pub fn render_mongo_inserts(collection: &str, report: &QueryResultReport) -> Str
     }
 }
 
-fn sql_literal(value: &str) -> String {
-    if value.eq_ignore_ascii_case("NULL") {
+fn sql_literal(value: Option<&str>) -> String {
+    let Some(value) = value else {
         return "NULL".into();
-    }
-    if value.parse::<i64>().is_ok() {
-        return value.to_string();
-    }
-    if value.parse::<f64>().is_ok() && value.contains('.') {
-        return value.to_string();
-    }
+    };
+    // Keep textual values quoted — do not infer numbers from display strings
+    // ("001" must stay a string; the string "NULL" is not SQL NULL).
     format!("'{}'", value.replace('\\', "\\\\").replace('\'', "''"))
 }
 
 fn json_literal(value: &str) -> String {
-    if value.eq_ignore_ascii_case("NULL") {
-        return "null".into();
-    }
-    if value.parse::<i64>().is_ok() {
-        return value.to_string();
-    }
-    if value.parse::<f64>().is_ok() {
-        return value.to_string();
+    // Prefer JSON-shaped values (bool/array/object/number) when the cell was
+    // already serialized JSON; otherwise emit a JSON string.
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(value) {
+        return v.to_string();
     }
     serde_json::to_string(value).unwrap_or_else(|_| "\"\"".into())
 }
@@ -138,7 +136,7 @@ mod tests {
     fn sql_insert_matches_table_values() {
         let report = QueryResultReport {
             columns: vec!["email".into()],
-            rows: vec![vec!["a@example.com".into()]],
+            rows: vec![vec![Some("a@example.com".into())]],
             rows_scanned: 1,
             rows_matched: 1,
         };
@@ -153,8 +151,8 @@ mod tests {
         let report = QueryResultReport {
             columns: vec!["_id".into(), "status".into()],
             rows: vec![
-                vec!["1".into(), "ok".into()],
-                vec!["2".into(), "failed".into()],
+                vec![Some("1".into()), Some("ok".into())],
+                vec![Some("2".into()), Some("failed".into())],
             ],
             rows_scanned: 2,
             rows_matched: 2,

@@ -109,18 +109,21 @@ fn type_bucket(path: &Path) -> String {
 }
 
 fn stats_archive(path: &Path, display: &str, config: &OmnicatConfig) -> Result<StatsReport> {
+    use crate::content::PreviewContent;
     let content = DriverRegistry::build(HandlerKind::Archive, path, config)?;
-    let text = content.plain_text();
     let mut types: BTreeMap<String, u64> = BTreeMap::new();
     let mut entries = 0u64;
-    for line in text.lines() {
-        let name = line.split_whitespace().last().unwrap_or("");
-        if name.is_empty() || name.ends_with('/') {
-            continue;
+    if let PreviewContent::Tree(tree) = content {
+        fn walk(node: &crate::content::TreeNode, types: &mut BTreeMap<String, u64>, n: &mut u64) {
+            if !node.is_dir && !node.name.is_empty() {
+                *n += 1;
+                *types.entry(type_bucket(Path::new(&node.path))).or_default() += 1;
+            }
+            for child in &node.children {
+                walk(child, types, n);
+            }
         }
-        entries += 1;
-        let p = Path::new(name);
-        *types.entry(type_bucket(p)).or_default() += 1;
+        walk(&tree.root, &mut types, &mut entries);
     }
     let mut fields = BTreeMap::new();
     fields.insert("entries".into(), serde_json::json!(entries));

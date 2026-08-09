@@ -61,7 +61,10 @@ fn run_sqlite_query(path: &Path, opts: &DbOptions, sql: &str) -> Result<DbReport
         Ok((
             crate::db::report::QueryResultReport {
                 columns: headers,
-                rows: rows.clone(),
+                rows: rows
+                    .iter()
+                    .map(|r| r.iter().cloned().map(Some).collect())
+                    .collect(),
                 rows_scanned: rows.len() as u64,
                 rows_matched: rows.len() as u64,
             },

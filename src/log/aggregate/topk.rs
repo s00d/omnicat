@@ -67,9 +67,8 @@ pub fn normalize_message(msg: &str) -> String {
                 continue;
             }
         }
-        // UUID
-        if msg.get(i..).is_some_and(|s| s.len() >= 36) {
-            let slice = &msg[i..i + 36];
+        // UUID (char-boundary safe: reject mid-codepoint slices)
+        if let Some(slice) = msg.get(i..i + 36) {
             if uuid_like(slice) {
                 out.push_str("<UUID>");
                 i += 36;

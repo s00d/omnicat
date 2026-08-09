@@ -35,24 +35,31 @@ pub fn follow_path(
                 );
             }
         }
-        let rec = parse::parse_line_with_format(text, format);
-        if !filter.matches(&rec) {
-            return Ok(());
-        }
-        messages += 1;
         let cont = is_stack_continuation(text);
-        if let Some(ref lvl) = level_filter {
-            if cont {
-                if !in_matching_block {
-                    return Ok(());
-                }
-            } else if line_matches_level(text, lvl) {
-                in_matching_block = true;
-            } else {
+        // Continuations inherit the active block; skip record filters so stack
+        // frames are not dropped by --errors/--level/--where.
+        if cont {
+            if !in_matching_block {
+                return Ok(());
+            }
+        } else {
+            let rec = parse::parse_line_with_format(text, format);
+            if !filter.matches(&rec) {
                 in_matching_block = false;
                 return Ok(());
             }
+            if let Some(ref lvl) = level_filter {
+                if line_matches_level(text, lvl) {
+                    in_matching_block = true;
+                } else {
+                    in_matching_block = false;
+                    return Ok(());
+                }
+            } else {
+                in_matching_block = true;
+            }
         }
+        messages += 1;
         if text.to_ascii_lowercase().contains("error") {
             errors += 1;
         }

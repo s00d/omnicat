@@ -50,6 +50,8 @@ fn overview_from_dir(path: &Path) -> Result<DynamoDbExportOverview> {
                         tables.push(s.rsplit('/').next().unwrap_or(s).to_string());
                     }
                 }
+            } else if let Some(s) = v.get("tableArn").and_then(|a| a.as_str()) {
+                tables.push(s.rsplit('/').next().unwrap_or(s).to_string());
             }
         }
     }
