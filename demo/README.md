@@ -23,7 +23,7 @@ vhs demo/omnicat-demo.tape
 Text fixtures are committed as-is. Office archives, images, SQLite, etc. are produced by:
 
 ```bash
-chmod +x demo/generate.sh demo/smoke.sh demo/smoke-log-db.sh
+chmod +x demo/generate.sh demo/smoke.sh
 ./demo/generate.sh
 ```
 
@@ -33,7 +33,6 @@ Verify fixtures:
 
 ```bash
 ./demo/smoke.sh
-./demo/smoke-log-db.sh          # omnicat log + db formats
 SMOKE_RENDER=1 ./demo/smoke.sh   # also runs cargo test demo_fixtures
 ```
 
@@ -79,26 +78,10 @@ done
 | fallback (text) | `files/sample.txt` | UTF-8 → source editor |
 | fallback (hex) | `files/sample.bin` | binary dump |
 
-## Log analysis (`omnicat log`)
+## DB / log fixtures
 
-Fixtures under `demo/log/` — one sample per auto-detected format:
+`demo/db/` and `demo/log/` are sample files. `omnicat demo/db/sample.sql` shows a dump overview. No `log`/`db` subcommands.
 
-| Format | File |
-|--------|------|
-| JSON | `log/json.log` |
-| logfmt | `log/logfmt.log` |
-| nginx access | `log/nginx.log` |
-| tracing | `log/tracing.log` |
-| plain text | `log/text.log` |
-
-After `./demo/generate.sh`: compressed `json.log.gz`, `.zst`, `.bz2`, `.xz`.
-
-```bash
-omnicat log demo/log/json.log --stats
-omnicat log demo/log/json.log.gz --errors
-omnicat log demo/log/nginx.log --http
-./demo/smoke-log-db.sh
-```
 
 ## Database inspector (`omnicat db`)
 

@@ -1,16 +1,13 @@
 pub mod cli;
 pub mod config;
 pub mod content;
-pub mod db;
 pub mod detect;
 pub mod drivers;
-pub mod editor;
 pub mod gate;
 pub mod init;
 pub mod input;
 pub mod inspect;
 pub mod io;
-pub mod log;
 pub mod orchestrator;
 pub mod preview;
 pub mod sinks;
@@ -19,7 +16,6 @@ pub mod status;
 mod cat;
 
 use std::io::Write;
-use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::Result;
@@ -30,7 +26,6 @@ use crate::config::load_config;
 use crate::detect::HandlerKind;
 use crate::gate::should_render;
 use crate::inspect::InspectOptions;
-use crate::log::options::LogOptions;
 use crate::orchestrator::resolve::ResolvedHandler;
 use crate::orchestrator::{print_hint, PreviewOrchestrator};
 
@@ -57,15 +52,6 @@ pub fn run() -> Result<()> {
         Command::Inspect { path, options } => {
             handle_inspect(path.as_deref(), &options)?;
         }
-        Command::Open { file, editor } => {
-            editor::open_path(Path::new(&file), editor.as_deref())?;
-        }
-        Command::Log { paths, options } => {
-            handle_log(&paths, &options)?;
-        }
-        Command::Db { source, options } => {
-            db::run_db(&source, &options)?;
-        }
     }
 
     Ok(())
@@ -84,10 +70,6 @@ pub fn run_main() -> ExitCode {
 fn handle_inspect(path: Option<&str>, options: &InspectOptions) -> Result<()> {
     let config = load_config()?;
     inspect::run_inspect(path, options, &config)
-}
-
-fn handle_log(paths: &[std::path::PathBuf], options: &LogOptions) -> Result<()> {
-    log::commands::run_log(paths, options)
 }
 
 fn handle_file(path: &str, options: &FileOptions) -> Result<()> {

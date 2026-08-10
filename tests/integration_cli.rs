@@ -3,7 +3,6 @@ use std::process::Command;
 use assert_cmd::assert::OutputAssertExt;
 use assert_cmd::cargo::cargo_bin;
 use omnicat::preview::gui_available;
-use predicates::prelude::PredicateBooleanExt;
 
 fn omnicat() -> Command {
     Command::new(cargo_bin("omnicat"))
@@ -30,7 +29,7 @@ fn help_mentions_preview() {
 #[test]
 fn init_zsh_emits_wrapper() {
     omnicat()
-        .args(["init", "zsh"])
+        .args(["--init", "zsh"])
         .assert()
         .success()
         .stdout(predicates::str::contains("command omnicat"));
@@ -39,7 +38,7 @@ fn init_zsh_emits_wrapper() {
 #[test]
 fn init_unknown_shell_errors() {
     omnicat()
-        .args(["init", "fish"])
+        .args(["--init", "fish"])
         .assert()
         .failure()
         .stderr(predicates::str::contains("unsupported shell"));
@@ -102,32 +101,13 @@ fn preview_headless_returns_false() {
     std::env::remove_var("OMNICAT_NO_GUI");
 }
 
-#[cfg(unix)]
-#[test]
-fn open_missing_file_errors() {
-    omnicat()
-        .args(["open", "/tmp/omnicat-definitely-missing-xyz"])
-        .assert()
-        .failure()
-        .stderr(predicates::str::contains("not found"));
-}
-
-#[test]
-fn help_mentions_system_open() {
-    omnicat()
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("system default"));
-}
-
 #[test]
 fn native_flag_still_in_help() {
     omnicat()
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicates::str::contains("-native"));
+        .stdout(predicates::str::contains("--native"));
 }
 
 #[test]
@@ -207,20 +187,12 @@ fn find_jsonl_field_aware() {
 }
 
 #[test]
-fn log_context_around() {
-    let tmp = tempfile::NamedTempFile::with_suffix(".log").unwrap();
-    std::fs::write(
-        tmp.path(),
-        "2026-08-06T12:42:15Z INFO before\n2026-08-06T12:42:17Z ERROR center\n2026-08-06T12:42:19Z INFO after\n",
-    )
-    .unwrap();
+fn sql_dump_preview_shows_overview() {
     omnicat()
-        .args(["log", "--around", "12:42:17", "--context", "1"])
-        .arg(tmp.path())
+        .arg("demo/db/sample.sql")
         .assert()
         .success()
-        .stdout(predicates::str::contains("center"))
-        .stdout(predicates::str::contains("before"));
+        .stdout(predicates::str::contains("CREATE"));
 }
 
 #[test]
@@ -341,53 +313,4 @@ fn info_image_includes_bit_depth() {
         .assert()
         .success()
         .stdout(predicates::str::contains("bit_depth"));
-}
-
-#[test]
-fn log_stats_json() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("app.log");
-    std::fs::write(
-        &path,
-        r#"{"ts":"2026-01-01T12:00:00Z","level":"error","service":"api","msg":"timeout"}
-{"ts":"2026-01-01T12:00:01Z","level":"info","service":"api","msg":"ok"}
-"#,
-    )
-    .unwrap();
-    omnicat()
-        .args(["log", "--stats", "--json"])
-        .arg(&path)
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("messages"))
-        .stdout(predicates::str::contains("ERROR"));
-}
-
-#[test]
-fn log_where_errors() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("app.log");
-    std::fs::write(
-        &path,
-        r#"{"level":"error","msg":"bad"}
-{"level":"info","msg":"good"}
-"#,
-    )
-    .unwrap();
-    omnicat()
-        .args(["log", "--errors"])
-        .arg(&path)
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("bad"))
-        .stdout(predicates::str::contains("good").not());
-}
-
-#[test]
-fn log_subcommand_in_help() {
-    omnicat()
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("log"));
 }

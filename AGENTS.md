@@ -14,11 +14,10 @@
 - Test: `cargo test --all`
 - Build: `cargo build` (debug) or `cargo build --release` (binary at `target/release/omnicat`)
 - Smoke tests (Unix): `OMNICAT_BIN=target/release/omnicat ./test/run.sh`
-- Log + DB smoke: `./demo/smoke-log-db.sh` (fixtures under `demo/log/`, `demo/db/`)
 
 ### Running / demonstrating the CLI (non-obvious)
 - omnicat only renders a formatted preview when stdout is a TTY and exactly one file/dir argument is given. When output is piped or redirected it behaves like plain `cat` (raw bytes). To see rendered output non-interactively, allocate a pty, e.g. `script -qec "target/release/omnicat demo/files/sample.md" /dev/null`.
 - This VM is headless: GUI `--preview` mode is unavailable and falls back to the terminal. Set `OMNICAT_NO_GUI=1` to skip GUI attempts, and `CI=1`/`OMNICAT_NO_PLAYBACK` to avoid audio playback when previewing media.
 - Sample files for manual testing live in `demo/files/` (md, rs, csv, xlsx, json, pdf, epub, images, archives, sqlite, …), `demo/dir-tree/`, `demo/log/`, and `demo/db/` (MySQL dump, Redis, SQLite, mongodump).
-- `omnicat db` / `omnicat log` are file-only (no live DB/log server URLs). `--print-query`/`-Q` emits INSERT/insertMany from matched rows, not an echo of the input query.
-- Syntax-highlighting theme is background-aware (`terminal.code.theme: auto`). Auto-detection queries the terminal via OSC 11 (then `COLORFGBG`) and only runs when both stdin and stdout are TTYs, so it is skipped under pipes/redirects and in most test harnesses (falls back to a dark theme). For deterministic manual testing force it with `OMNICAT_THEME=light` or `OMNICAT_THEME=dark`; `omnicat -status` prints the resolved theme.
+- No subcommands: `omnicat` only previews/inspects files. SQL dumps (`.sql` / `.sql.gz`) render an overview (tables found); SQLite still shows schema + sample rows.
+- Syntax-highlighting theme is background-aware (`terminal.code.theme: auto`). Auto-detection queries the terminal via OSC 11 (then `COLORFGBG`) and only runs when both stdin and stdout are TTYs, so it is skipped under pipes/redirects and in most test harnesses (falls back to a dark theme). For deterministic manual testing force it with `OMNICAT_THEME=light` or `OMNICAT_THEME=dark`; `omnicat --status` prints the resolved theme.

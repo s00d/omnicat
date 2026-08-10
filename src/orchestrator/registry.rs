@@ -60,6 +60,20 @@ impl DriverRegistry {
             return Some(HandlerKind::Directory);
         }
 
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.ends_with(".sql.gz")
+            || name.ends_with(".sql.zst")
+            || name.ends_with(".sql.zstd")
+            || name.ends_with(".sql.bz2")
+            || name.ends_with(".sql.xz")
+        {
+            return Some(HandlerKind::Database);
+        }
+
         if let Some(ext) = path
             .extension()
             .and_then(|e| e.to_str())

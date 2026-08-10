@@ -23,6 +23,8 @@ use crate::detect::HandlerKind;
 use crate::input::InputRef;
 use crate::inspect::capabilities::Capabilities;
 use crate::inspect::report::{CapabilitiesReport, CapabilityLine, InspectReport};
+use crate::inspect::text::sanitize_text;
+use crate::io::follow_loop;
 use crate::orchestrator::registry::DriverRegistry;
 use crate::orchestrator::PreviewOrchestrator;
 use crate::sinks::report::write_report;
@@ -130,11 +132,10 @@ pub fn run_inspect(
 
     if options.follow {
         let input = InputRef::parse(raw_path)?;
-        return crate::log::follow::follow_path(
+        return follow_file(
             input.path_for_ops(),
             options.level.as_deref(),
             options.allow_unsafe,
-            &crate::log::filter::LogFilter::default(),
         );
     }
 
@@ -375,4 +376,26 @@ fn print_all_capabilities(json: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn follow_file(path: &Path, level: Option<&str>, allow_unsafe: bool) -> Result<()> {
+    let level = level.map(|s| s.to_ascii_lowercase());
+    follow_loop(path, |line| {
+        let text = line.as_str().unwrap_or("");
+        if let Some(ref lvl) = level {
+            let lower = text.to_ascii_lowercase();
+            if !lower.contains(lvl.trim_end_matches('+')) {
+                return Ok(());
+            }
+        }
+        let out = sanitize_text(text, allow_unsafe);
+        let mut stdout = io::stdout().lock();
+        write!(stdout, "{out}")?;
+        if !out.ends_with('\n') {
+            writeln!(stdout)?;
+        }
+        stdout.flush()?;
+        Ok(())
+    })
+    .map_err(|e| anyhow::anyhow!("{e}"))
 }

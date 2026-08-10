@@ -11,7 +11,7 @@
 # omnicat
 
 **Preview almost any file in your terminal — or in a GUI window.**  
-**Also: inspect artifacts, analyze logs, and query database backups — file-only, no live servers.**
+**Also: inspect artifacts (info, schema, find, hash, …) — no live servers, no subcommands.**
 
 omnicat is a smarter replacement for `cat` when you are working interactively. Point it at a file or folder and get a readable preview: Markdown with formatting, syntax-highlighted code, spreadsheet tables, PDF text, ebook chapters, archive trees, images, and more.
 
@@ -19,18 +19,17 @@ When you pipe output to another command or redirect to a file, omnicat behaves e
 
 **Make `cat` smart — transparently.** Keep typing `cat` as you always have. With the optional shell shim (below), a single file in an interactive terminal renders as a preview; pipes, redirects, multiple files, and flags stay plain `cat`, byte for byte. You can also call `omnicat` directly — both names do the same thing once the shim is enabled.
 
-## What's new in 0.9
+## What's new
 
-- **`omnicat db`** — universal **file-only** database inspector: MySQL dumps (streaming SQL), Redis RDB/AOF, PostgreSQL dumps, **SQLite**, **MongoDB mongodump** (BSON / archive / JSON filter `--query`), plus tier-2 exports (DynamoDB, mongoexport JSONL, Elasticsearch snapshots).
-- **`--print-query` / `-Q`** — after `--query`, emit **INSERT** (SQL) or **`insertOne`/`insertMany`** (Mongo) with the **same row values** as the result table — ready to paste into a live DB. No table output when `-Q` is set.
-- **Streaming MySQL dump scan** — `LIMIT` / simple `WHERE` push-down; schema/load stop at first `INSERT`; multi‑GB dumps stay low-RSS.
-- **`omnicat log`** — streaming log toolkit (JSON / logfmt / nginx / tracing / text), aggregates, multi-file merge, compressed logs.
-- **Inspect surface** — `--info`, `--schema`, `--find`, `--hash`, `--duplicates`, `--diff`, virtual `archive.zip/path`, JSONL log tables, and more.
-- Demo GIF / fixtures updated (`demo/db`, `demo/log`); smoke: `./demo/smoke-log-db.sh`.
+- **No subcommands** — dropped `log` / `db` / `open` / `init` / `status` / `native` as subcommands. File preview (+ inspect flags) only.
+- **SQL dumps** — `omnicat backup.sql` shows a dump overview (CREATE/INSERT tables) instead of raw highlight.
+- **SQLite** — still previews schema + sample rows; use `-q` for queries via inspect.
+- Inspect flags remain: `--info`, `--schema`, `--find`, `--hash`, `--duplicates`, `--diff`, …
+- `--status` / `--init` / `--native` are top-level flags (not subcommands).
 
 ## Demo
 
-Terminal previews (Markdown, syntax-highlighted code, CSV, **`db --query`**, **`log --stats`**, directory tree, `--status`) — recorded with [VHS](https://github.com/charmbracelet/vhs).
+Terminal previews (Markdown, syntax-highlighted code, CSV, directory tree, `--status`) — recorded with [VHS](https://github.com/charmbracelet/vhs).
 
 <p align="center">
 <img src="https://github.com/s00d/omnicat/blob/main/demo/omnicat-demo.gif?raw=true" alt="omnicat terminal demo: Markdown, syntax-highlighted code, CSV table, db SQL query, log stats, directory tree, and --status" width="900">
@@ -73,14 +72,9 @@ omnicat --duplicates ~/Downloads
 omnicat --diff a.json b.json
 omnicat backup.zip/config.yaml
 omnicat report.pdf --text
+omnicat backup.sql                 # SQL dump overview (tables)
 omnicat --capabilities
-
-# Logs & DB backups
-omnicat log app.log --stats
-omnicat log app.log.gz --errors
-omnicat db backup.sql --query "SELECT email FROM users WHERE status = 'failed' LIMIT 10"
-omnicat db backup.sql --query "SELECT email FROM users LIMIT 1" --print-query
-omnicat db mongodump/ --table users --query '{"status":"failed"}'
+omnicat --status
 ```
 
 ## Inspect
@@ -112,154 +106,12 @@ Image `--info` includes dimensions, color, and bit depth. Markdown `--diff` comp
 
 Inspector commands always write to stdout (including pipes). Without inspect flags, pipe/multi-file behavior stays plain `cat`.
 
-## Log analysis (`omnicat log`)
+## SQL dumps & SQLite
 
-CLI-first log toolkit — streaming scan, no database or index. Reads huge files via chunked I/O; supports `.gz` / `.bz2` / `.xz` / `.zst` on the fly.
+- `omnicat backup.sql` / `.sql.gz` → dump **overview** (CREATE/INSERT tables found).
+- `omnicat app.sqlite` → schema + sample rows; `-q 'SELECT …'` still works via inspect.
 
-```bash
-omnicat log app.log
-omnicat log app.log --follow
-omnicat log app.log --errors
-omnicat log app.log --stats
-omnicat log app.log --timeline
-omnicat log app.log --rate
-omnicat log app.log --top message
-omnicat log app.log --slow
-omnicat log access.log --http
-omnicat log app.log --request abc123
-omnicat log app.log --where 'level:error service:api'
-omnicat log app.log --since 1h --until 30m
-omnicat log api.log worker.log nginx.log --errors   # merge by timestamp
-omnicat log app.log --around 12:42:17 --context 5
-omnicat log app.log --query 'top message limit 10'
-omnicat log app.log --rate --errors
-omnicat log app.log --top errors
-omnicat app.jsonl --find 'level:error'
-```
-
-Auto-detects JSON logs, logfmt, nginx combined, plain text (`2026-08-06 ERROR …`), and tracing-style fields.
-
-Multi-file mode merges lines by timestamp (best-effort). Aggregates (`--stats`, `--timeline`, `--top`, `--http`) update counters in one pass — memory stays bounded.
-
-Fixtures: `demo/log/` — verify with `./demo/smoke-log-db.sh`.
-
-## Database inspector (`omnicat db`)
-
-Read-only streaming inspector for **backup files and local DB files** — no live `mysql://`, `mongodb://`, `postgres://`, or `redis://` connections.
-
-### Examples
-
-```bash
-# MySQL dump — streaming SQL (DataFusion)
-omnicat db backup.sql --tables
-omnicat db backup.sql --schema
-omnicat db backup.sql --stats
-omnicat db backup.sql --query "SELECT id, status FROM orders WHERE status = 'failed' LIMIT 100"
-omnicat db backup.sql.gz --query 'SELECT status, COUNT(*) FROM orders GROUP BY status' --output jsonl
-omnicat db backup.sql --query 'SELECT * FROM orders' --table orders --extract out.jsonl
-
-# Turn matched rows into INSERT for a live DB (same values as the table; no table output)
-omnicat db backup.sql --query "SELECT email FROM users LIMIT 1" --print-query
-# → INSERT INTO `users` (`email`) VALUES
-#   ('a@example.com');
-
-# SQLite
-omnicat db app.db --tables
-omnicat db app.db --query "SELECT * FROM users LIMIT 5"
-omnicat db app.db --query "SELECT email FROM users WHERE status = 'failed'" -Q
-
-# MongoDB mongodump (JSON filter, not SQL)
-omnicat db mongodump/ --stats
-omnicat db mongodump/ --table users --query '{"status":"failed"}' --output jsonl
-omnicat db mongodump/ --query '{"collection":"mydb.users","filter":{"status":"failed"},"limit":10}'
-omnicat db mongodump/ --table users --query '{"status":"failed"}' -Q
-# → db.users.insertOne({...}) / insertMany([...])
-
-# Redis / PostgreSQL / datadir (metadata)
-omnicat db dump.rdb --stats
-omnicat db dump.rdb --schema
-omnicat db appendonly.aof --find 'user:123'
-omnicat db backup.dump --schema
-omnicat db /var/lib/mysql/            # WARNING: metadata only
-```
-
-### Supported sources
-
-| Source | Detected by | `--query` | Inspect |
-|--------|-------------|-----------|---------|
-| MySQL dump (`.sql`, `.sql.gz`, `.sql.zst`, `.sql.bz2`, `.sql.xz`) | extension / sniff | SQL via DataFusion (**streaming**) | overview, `--stats`, `--schema`, `--tables`, `--find` |
-| SQLite (`.db`, `.sqlite`, `.sqlite3`) | extension + magic | SQL via rusqlite (read-only) | tables / schema / row counts |
-| MongoDB mongodump (dir, `.bson`, `.archive`) | `.bson` + `.metadata.json`, archive magic | **JSON filter** or `{collection,filter,limit,projection}` | collections, docs, indexes from metadata |
-| mongoexport JSON/JSONL | Extended JSON lines | JSON filter (line streaming) | counts, `--find`, `--sample` |
-| MongoDB WiredTiger datadir | `WiredTiger`, `journal/` | — | metadata + WARNING |
-| Redis RDB (`.rdb`) | extension | — | key types, `--sample`, `--schema` patterns |
-| Redis AOF (`.aof`, manifest dir) | extension | — | command counts, `--find`, `--top` |
-| PostgreSQL dump (`.dump`, `.backup`, `-Fd` dir) | `PGDMP` / `toc.dat` | — (V1) | TOC via `pg_restore --list` |
-| MySQL datadir (`ibdata*`, `*.ibd`) | directory layout | — | listing + WARNING |
-| DynamoDB export | AWS JSON/Parquet layout | Parquet → DataFusion (V1) | tables / sizes |
-| Elasticsearch snapshot | `index-*`, `meta-*` | — | indices + WARNING |
-
-### Flags (shared)
-
-| Flag | Meaning |
-|------|---------|
-| `--query` | SQL (MySQL dump / SQLite) or Mongo JSON filter |
-| `--print-query` / `-Q` | After query: print **INSERT** / Mongo **insert\*** with matched values (stdout only; suppresses the result table) |
-| `--table NAME` | Restrict to one table / collection (`users` or `mydb.users`) |
-| `--schema` / `--tables` / `--stats` | Schema, listing, statistics |
-| `--find` / `--sample` / `--top` | Search / sample / top‑N (where supported) |
-| `--output table\|csv\|json\|jsonl` | Query result format (default `table`) |
-| `--extract PATH` | Write query rows to a file |
-| `--progress` | Scan progress on stderr |
-| `--json` | Machine-readable `DbReport` for non-query inspect modes |
-
-### MySQL dump `--query`
-
-- Streaming: only tables in `FROM` are registered; simple predicates and `LIMIT` are pushed into the dump scan (early exit — multi‑GB dumps stay low memory).
-- Use **single-quoted** SQL string literals (`'failed'`, not `"failed"`).
-- `--output jsonl` writes row JSONL to stdout (not a `DbReport` envelope).
-
-### Mongo `--query`
-
-Not SQL. Either:
-
-```bash
-# filter only — collection from --table
-omnicat db dump/ --table users --query '{"status":"failed"}'
-
-# envelope
-omnicat db dump/ --query '{"collection":"mydb.users","filter":{"status":"failed"},"limit":100,"projection":{"email":1}}'
-```
-
-V1 filter ops: equality, `$eq`, `$gt`/`$gte`/`$lt`/`$lte`, `$in`, `$exists`, `$regex`, nested paths `a.b`. No `$aggregate` / `$lookup` / cross-collection JOIN.
-
-### `--print-query` / `-Q`
-
-Runs the same `--query`, then prints paste-ready statements built from **result rows** (same values you would see in the table):
-
-```text
-# SQL
-INSERT INTO `users` (`email`) VALUES
-('a@example.com'),
-('b@example.com');
-
-# Mongo
-db.users.insertMany([
-  {"_id": 2, "email": "b@example.com", "status": "failed"},
-]);
-```
-
-Requires `--query`. Does **not** echo your input SQL.
-
-### Out of scope
-
-- Live DB URLs / restore / write / index builds
-- Full MQL aggregation
-- Hot datadir page reads (MySQL `.ibd`, WiredTiger) — metadata + WARNING only
-- PostgreSQL `--query` (file-only TOC in V1)
-- Redis 8+ RDB may fail (parser `rdb 0.3`)
-
-Fixtures: `demo/db/` — verify with `./demo/smoke-log-db.sh`. Large dump stress helper: `demo/write_large_sql_dump.py`.
+Log / DB **subcommands were removed** — use plain file preview and inspect flags instead.
 
 ## Install
 
@@ -391,9 +243,6 @@ Remove the `eval "$(omnicat init …)"` line from your shell config and reload. 
 | Open with a chosen program | `omnicat open <file> --editor=subl` |
 | Force plain `cat` | `cat -native <file> …` or `omnicat -native …` |
 | Page long output | `omnicat --paginate <file>` |
-| Log scan | `omnicat log <file> [--stats\|--errors\|…]` |
-| DB backup inspect | `omnicat db <dump> [--query\|--schema\|…]` |
-| Paste-ready INSERT from query | `omnicat db <dump> --query '…' -Q` |
 | Check what works on your system | `cat -status` or `omnicat -status` |
 | Help | `omnicat --help` |
 
@@ -448,7 +297,7 @@ Built-in previews (no extra installs):
 | Media | `.mp3`, `.wav`, `.flac`, `.ogg`, `.oga`, `.opus`, `.m4a`, `.aac`, `.aiff`, `.aif`, `.wma`, `.wv`, `.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.m4v` (metadata; audio may play in terminal) |
 | Images | `.png`, `.apng`, `.jpg`, `.jpeg`, `.jfif`, `.jpe`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.tif`, `.heic`, `.ico`, `.tga`, `.qoi`, `.pnm`, `.pbm`, `.pgm`, `.ppm` |
 | Fonts | `.ttf`, `.otf`, `.woff`, `.woff2` |
-| Databases | `.sqlite`, `.sqlite3`, `.db` (+ dumps via `omnicat db`) |
+| Databases | `.sqlite`, `.sqlite3`, `.db` `.sql` / `.sql.gz` dump overview |
 | Email | `.eml` (→ Markdown) |
 | Notebooks | `.ipynb` (→ Markdown) |
 | Property lists | `.plist` |
@@ -496,7 +345,6 @@ cargo clippy -- -D warnings
 cargo build --release
 OMNICAT_BIN=target/release/omnicat ./test/run.sh
 ./demo/smoke.sh
-./demo/smoke-log-db.sh
 ```
 
 Release checklist: [`RELEASING.md`](RELEASING.md).
