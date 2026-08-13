@@ -19,6 +19,14 @@ When you pipe output to another command or redirect to a file, omnicat behaves e
 
 **Make `cat` smart — transparently.** Keep typing `cat` as you always have. With the optional shell shim (below), a single file in an interactive terminal renders as a preview; pipes, redirects, multiple files, and flags stay plain `cat`, byte for byte. You can also call `omnicat` directly — both names do the same thing once the shim is enabled.
 
+## Install
+
+```bash
+cargo install omnicat
+```
+
+Requires Rust **1.92+** and `~/.cargo/bin` on your `PATH`.
+
 ## What's new
 
 - **Unified search** — one predicate engine powers `--find` and dump `WHERE` (shorthand `level:error`, SQL fragments, substring). Full `SELECT` stays on `-q`.
@@ -253,55 +261,6 @@ Compressed dumps (`.sql.gz`, `.sql.zst`, …) use the same path as plain `.sql`.
 - `omnicat app.sqlite` → schema + sample rows; use `-q` for ad-hoc SQL.
 
 There are **no** `log` / `db` subcommands — point omnicat at the file and use inspect flags.
-
-## Install
-
-### Cargo (global install)
-
-Install the `omnicat` binary into `~/.cargo/bin` (available everywhere if that directory is on your `PATH`):
-
-```bash
-# Rust toolchain (once) — https://rustup.rs
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# from crates.io (when published)
-cargo install omnicat
-```
-
-From a git checkout:
-
-```bash
-git clone https://github.com/s00d/omnicat.git
-cd omnicat
-cargo install --path .
-```
-
-From this directory without publishing:
-
-```bash
-cargo install --path .
-```
-
-Upgrade after a new release:
-
-```bash
-cargo install omnicat --force
-```
-
-Requires Rust **1.92+**. If `omnicat` is not found, add Cargo’s bin dir to your shell profile:
-
-```bash
-export PATH="$HOME/.cargo/bin:$PATH"
-```
-
-### Build from source
-
-```bash
-git clone https://github.com/s00d/omnicat.git
-cd omnicat
-cargo build --release
-# binary: target/release/omnicat
-```
 
 ## Make `cat` smart (opt-in)
 
