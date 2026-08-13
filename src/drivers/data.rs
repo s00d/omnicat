@@ -163,17 +163,25 @@ fn render_tsv(raw: &str, config: &OmnicatConfig) -> Result<String> {
     render_delimited_terminal(raw, b'\t', config)
 }
 
+fn preview_row_limit(config: &OmnicatConfig) -> usize {
+    if config.inspect.no_limit || config.inspect.max_rows == 0 {
+        return usize::MAX;
+    }
+    config
+        .gui
+        .spreadsheet
+        .max_rows
+        .min(config.terminal.data.max_rows)
+        .max(1)
+}
+
 fn parse_delimited_path(
     path: &Path,
     delimiter: u8,
     config: &OmnicatConfig,
     ctx: &PreviewContext,
 ) -> Result<TableContent> {
-    let max_rows = config
-        .gui
-        .spreadsheet
-        .max_rows
-        .min(config.terminal.data.max_rows);
+    let max_rows = preview_row_limit(config);
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mut progress = ProgressReporter::new("preview", ctx.progress);
     if ctx.progress {
@@ -215,11 +223,7 @@ fn render_delimited_path_terminal_with(
     progress: &mut ProgressReporter,
     out: &mut dyn Write,
 ) -> Result<()> {
-    let max_rows = config
-        .gui
-        .spreadsheet
-        .max_rows
-        .min(config.terminal.data.max_rows);
+    let max_rows = preview_row_limit(config);
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
     progress.status(&format!("{name}  {}", human_bytes(ctx.size)));
 
@@ -233,15 +237,13 @@ fn render_delimited_path_terminal_with(
         ctx.size,
     )?;
 
-    progress.status(&format!("render  {} rows", rows.len()));
-    crate::sinks::styled_table::write_styled_table_with_progress(
+    crate::sinks::styled_table::write_styled_table(
         out,
         None,
         &headers,
         &rows,
         config,
         config.terminal.data.table_border,
-        Some(progress),
     )?;
     let cols = headers
         .len()
@@ -268,7 +270,7 @@ fn human_bytes(n: u64) -> String {
 }
 
 fn render_delimited_terminal(raw: &str, delimiter: u8, config: &OmnicatConfig) -> Result<String> {
-    let max = config.terminal.data.max_rows;
+    let max = preview_row_limit(config);
     let (headers, rows) = read_delimited_limited(raw.as_bytes(), delimiter, max, true, None, 0)?;
     let total = rows.len();
     let mut table = Table::new();
@@ -291,7 +293,7 @@ fn read_delimited_limited<R: std::io::Read>(
     max_rows: usize,
     header_row: bool,
     mut progress: Option<&mut ProgressReporter>,
-    _file_size: u64,
+    file_size: u64,
 ) -> Result<(Vec<String>, Vec<Vec<String>>)> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)
@@ -299,7 +301,8 @@ fn read_delimited_limited<R: std::io::Read>(
         .flexible(true)
         .from_reader(reader);
     let mut records = Vec::new();
-    for (i, result) in rdr.records().enumerate() {
+    let mut i = 0usize;
+    loop {
         let limit = if header_row {
             max_rows.saturating_add(1)
         } else {
@@ -308,19 +311,24 @@ fn read_delimited_limited<R: std::io::Read>(
         if i >= limit {
             break;
         }
-        records.push(
-            result
-                .context("csv parse error")?
-                .iter()
-                .map(str::to_string)
-                .collect(),
-        );
+        let mut record = csv::StringRecord::new();
+        if !rdr.read_record(&mut record)? {
+            break;
+        }
+        records.push(record.iter().map(str::to_string).collect());
         if let Some(p) = progress.as_mut() {
             let shown = if header_row { i } else { i + 1 };
             if shown > 0 {
-                p.tick_count_total(shown as u64, max_rows.max(1) as u64, "rows");
+                if max_rows != usize::MAX {
+                    p.tick_count_total(shown as u64, max_rows.max(1) as u64, "rows");
+                } else if file_size > 0 {
+                    p.tick_bytes(rdr.position().byte(), Some(file_size));
+                } else {
+                    p.tick_count(shown as u64, "rows");
+                }
             }
         }
+        i += 1;
     }
     Ok(table_from_records(records, max_rows, header_row))
 }
@@ -337,7 +345,7 @@ fn build_jsonl_table(
     let mut keys: Vec<String> = Vec::new();
     let mut key_set = std::collections::BTreeSet::new();
     let mut objects = Vec::new();
-    let max = config.terminal.data.max_rows;
+    let max = preview_row_limit(config);
     let mut progress = ProgressReporter::new("read", ctx.progress);
     FileHandle::open(path, OpenOptions::stream())?.for_each_line(|line| {
         let text = line.as_str().unwrap_or("").trim();
@@ -352,9 +360,10 @@ fn build_jsonl_table(
                 }
             }
             objects.push(map);
-            progress.tick_count(objects.len() as u64, "rows");
             if ctx.size > 0 {
                 progress.tick_bytes(line.line_no.saturating_mul(64), Some(ctx.size));
+            } else {
+                progress.tick_count(objects.len() as u64, "rows");
             }
             if objects.len() >= max {
                 return Ok(ControlFlow::Break(()));
@@ -604,25 +613,16 @@ mod tests {
 
         let mut ctx = crate::content::preview_context(&path);
         ctx.progress = true;
-        let (mut progress, captured) = ProgressReporter::capturing("preview");
+        let mut progress = ProgressReporter::for_test("preview");
         let mut out = Vec::new();
         render_delimited_path_terminal_with(&path, b',', &cfg, &ctx, &mut progress, &mut out)
             .unwrap();
 
-        let prog = String::from_utf8(captured.lock().unwrap().clone()).unwrap();
         let table = String::from_utf8(out).unwrap();
 
         assert!(
-            prog.contains("preview  big.csv"),
-            "progress must name the file before table dump, got {prog:?}"
-        );
-        assert!(
-            prog.contains('\n'),
-            "status must be a real line, not only \\r: {prog:?}"
-        );
-        assert!(
             progress.paint_count() >= 2,
-            "expected status + row ticks, paint_count={}",
+            "expected status + read ticks, paint_count={}",
             progress.paint_count()
         );
         assert!(
@@ -630,11 +630,48 @@ mod tests {
             "stdout must contain the table, got {} bytes",
             table.len()
         );
-        let status_at = prog.find("preview  big.csv").unwrap();
-        let render_at = prog.find("render");
-        if let Some(r) = render_at {
-            assert!(status_at < r, "file status must precede render ticks");
+        assert!(
+            table.contains("500 rows ×"),
+            "default cap should keep footer at 500, got footer slice {:?}",
+            table.lines().last()
+        );
+    }
+
+    #[test]
+    fn csv_all_lifts_preview_row_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big.csv");
+        let mut csv = String::from("id,name\n");
+        for i in 0..800 {
+            csv.push_str(&format!("{i},row-{i}\n"));
         }
+        std::fs::write(&path, csv).unwrap();
+
+        let mut cfg = OmnicatConfig::default();
+        cfg.terminal.data.max_rows = 500;
+        cfg.gui.spreadsheet.max_rows = 500;
+        cfg.inspect.no_limit = true;
+        cfg.inspect.max_rows = 0;
+
+        let ctx = crate::content::preview_context(&path);
+        let mut progress = ProgressReporter::for_test("preview");
+        let mut out = Vec::new();
+        render_delimited_path_terminal_with(&path, b',', &cfg, &ctx, &mut progress, &mut out)
+            .unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(
+            text.contains("800 rows ×"),
+            "--all / no_limit must show all 800 rows, got {:?}",
+            text.lines().last()
+        );
+        assert!(
+            text.contains("row-799"),
+            "last data row missing under --all"
+        );
+        assert!(
+            text.contains('┌') || text.contains('|'),
+            "--all must still render a table, not raw CSV"
+        );
     }
 
     #[test]

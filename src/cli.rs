@@ -22,6 +22,8 @@ pub struct FileOptions {
     pub table: Option<String>,
     /// Throttled stderr progress while streaming tabular preview.
     pub progress: bool,
+    /// Disable row/byte caps (`--all`).
+    pub all: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -107,11 +109,14 @@ Examples:
   omnicat backup.sql -q \"SELECT * FROM users LIMIT 5\" --progress
   omnicat notes.epub --paginate
   omnicat notes.epub --page 3
+  omnicat demo/files/sample-large.csv --all
   omnicat -d a.json b.json
   omnicat --hash file.bin --progress
   omnicat --duplicates ~/Downloads
   omnicat --capabilities
   omnicat --status
+
+Cargo tip: pass flags after -- , e.g. cargo run -- file.csv --all
 ";
 
 /// Preview / pager options (shared via flatten).
@@ -353,6 +358,7 @@ impl OmniCli {
                     schema_only: options.schema,
                     table: options.table.clone(),
                     progress: self.output.progress,
+                    all: self.output.all,
                 };
                 if file_opts.preview_only {
                     file_opts.preview = true;
@@ -383,6 +389,7 @@ impl OmniCli {
             schema_only: false,
             table: None,
             progress: self.output.progress,
+            all: self.output.all,
         };
         if file_opts.preview_only {
             file_opts.preview = true;
@@ -592,6 +599,18 @@ mod tests {
                 );
             }
             other => panic!("expected File preview with --progress, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn all_flag_on_file_preview() {
+        match parse(&["demo/files/sample-large.csv", "--all"]) {
+            Command::File { path, options } => {
+                assert_eq!(path, "demo/files/sample-large.csv");
+                assert!(options.all, "--all must reach FileOptions for CSV preview");
+                assert!(!options.progress);
+            }
+            other => panic!("expected File preview with --all, got {other:?}"),
         }
     }
 }

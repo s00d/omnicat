@@ -71,18 +71,6 @@ pub fn write_styled_table(
     config: &OmnicatConfig,
     bordered: bool,
 ) -> Result<()> {
-    write_styled_table_with_progress(out, title, headers, rows, config, bordered, None)
-}
-
-pub fn write_styled_table_with_progress(
-    out: &mut dyn Write,
-    title: Option<&str>,
-    headers: &[String],
-    rows: &[Vec<String>],
-    config: &OmnicatConfig,
-    bordered: bool,
-    mut progress: Option<&mut crate::sinks::progress::ProgressReporter>,
-) -> Result<()> {
     if let Some(title) = title {
         writeln!(out, "{title}")?;
     }
@@ -91,12 +79,8 @@ pub fn write_styled_table_with_progress(
     if !headers.is_empty() {
         set_styled_header(&mut table, headers.to_vec(), config);
     }
-    let total = rows.len() as u64;
-    for (i, row) in rows.iter().enumerate() {
+    for row in rows {
         add_styled_row(&mut table, row.clone(), config);
-        if let Some(p) = progress.as_mut() {
-            p.tick_count_total((i + 1) as u64, total.max(1), "rows");
-        }
     }
     writeln!(out, "{table}")?;
     out.flush()?;

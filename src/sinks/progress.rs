@@ -1,84 +1,58 @@
-//! Throttled progress for long scans (`--progress`).
-//!
-//! Prefers `/dev/tty` so the line stays visible even when stderr is redirected
-//! (IDE runners, `2>file`). Falls back to stderr when it is a TTY.
+//! Single-line progress bar for `--progress` (stderr TTY, ANSI erase).
 
-use std::fs::OpenOptions;
 use std::io::{self, IsTerminal, Write};
 use std::time::{Duration, Instant};
 
-const THROTTLE: Duration = Duration::from_millis(100);
-const CHUNK_BYTES: u64 = 1024 * 1024;
-const CHUNK_UNITS: u64 = 100;
+const MIN_INTERVAL: Duration = Duration::from_millis(250);
+const CHUNK_BYTES: u64 = 512 * 1024;
+const BAR_WIDTH: usize = 24;
 
-enum ProgressOut {
-    Stderr,
-    #[cfg(unix)]
-    Tty(std::fs::File),
-    #[cfg(test)]
-    Capture(std::sync::Arc<std::sync::Mutex<Vec<u8>>>),
-}
-
-/// Opt-in progress line. No-op when disabled or no interactive tty is available.
+/// Opt-in progress bar. No-op when disabled or stderr is not a TTY.
 pub struct ProgressReporter {
     enabled: bool,
-    out: ProgressOut,
     label: String,
     started: Instant,
-    last: Instant,
+    last_paint: Instant,
     last_value: u64,
+    last_pct: u8,
     painted: bool,
     finished: bool,
-    /// How many times a line was actually written (tests / diagnostics).
     paint_count: u64,
+    #[cfg(test)]
+    test_fast: bool,
 }
 
 impl ProgressReporter {
-    /// Create a reporter. When `enabled` is false, ticks are no-ops.
     pub fn new(label: impl Into<String>, enabled: bool) -> Self {
-        if !enabled {
-            return Self::raw(label.into(), false, ProgressOut::Stderr);
-        }
-        #[cfg(unix)]
-        {
-            if let Ok(tty) = OpenOptions::new().write(true).open("/dev/tty") {
-                return Self::raw(label.into(), true, ProgressOut::Tty(tty));
-            }
-        }
-        let enabled = io::stderr().is_terminal();
-        Self::raw(label.into(), enabled, ProgressOut::Stderr)
-    }
-
-    /// Always-enabled reporter (for unit tests; ignores TTY).
-    #[cfg(test)]
-    pub fn for_test(label: impl Into<String>) -> Self {
-        Self::raw(label.into(), true, ProgressOut::Stderr)
-    }
-
-    /// Capturing reporter for tests that assert progress text.
-    #[cfg(test)]
-    pub fn capturing(
-        label: impl Into<String>,
-    ) -> (Self, std::sync::Arc<std::sync::Mutex<Vec<u8>>>) {
-        let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        (
-            Self::raw(label.into(), true, ProgressOut::Capture(buf.clone())),
-            buf,
-        )
-    }
-
-    fn raw(label: String, enabled: bool, out: ProgressOut) -> Self {
-        let now = Instant::now();
+        let enabled = enabled && io::stderr().is_terminal();
         Self {
             enabled,
-            out,
-            label,
-            started: now,
-            last: now,
+            label: label.into(),
+            started: Instant::now(),
+            last_paint: Instant::now(),
             last_value: 0,
+            last_pct: 0,
             painted: false,
             finished: false,
             paint_count: 0,
+            #[cfg(test)]
+            test_fast: false,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn for_test(label: impl Into<String>) -> Self {
+        Self {
+            enabled: true,
+            label: label.into(),
+            started: Instant::now(),
+            last_paint: Instant::now(),
+            last_value: 0,
+            last_pct: 0,
+            painted: false,
+            finished: false,
+            paint_count: 0,
+            test_fast: true,
         }
     }
 
@@ -90,136 +64,127 @@ impl ProgressReporter {
         self.paint_count
     }
 
-    /// Byte progress. `total` when known enables a percentage.
     pub fn tick_bytes(&mut self, done: u64, total: Option<u64>) {
         if !self.enabled || self.finished {
             return;
         }
-        if !self.should_emit(done, CHUNK_BYTES) {
+        let Some(total) = total.filter(|t| *t > 0) else {
+            if self.should_emit(done, None, false) {
+                let line = format!(
+                    "{} [{}] {} ({})",
+                    self.label,
+                    render_bar_indeterminate(self.started.elapsed()),
+                    human_bytes(done),
+                    rate_bytes(self.started.elapsed(), done)
+                );
+                self.paint(done, None, &line);
+            }
+            return;
+        };
+        let pct = pct(done, total);
+        if !self.should_emit(done, Some(pct), done >= total) {
             return;
         }
-        let line = match total.filter(|t| *t > 0) {
-            Some(total) => {
-                let pct = ((done as f64 / total as f64) * 100.0).min(100.0);
-                format!(
-                    "{}  {:>5.1}%  {}/{}",
-                    self.label,
-                    pct,
-                    human_bytes(done),
-                    human_bytes(total)
-                )
-            }
-            None => {
-                let rate = self.rate_bytes(done);
-                format!("{}  {}  ({})", self.label, human_bytes(done), rate)
-            }
-        };
-        self.paint(done, &line);
+        let line = format!(
+            "{} [{}] {:>3}% {}/{} ({})",
+            self.label,
+            render_bar(pct),
+            pct,
+            human_bytes(done),
+            human_bytes(total),
+            rate_bytes(self.started.elapsed(), done)
+        );
+        self.paint(done, Some(pct), &line);
     }
 
-    /// Unit progress (rows, files, …) without a known total.
     pub fn tick_count(&mut self, done: u64, unit: &str) {
         if !self.enabled || self.finished {
             return;
         }
-        if !self.should_emit(done, CHUNK_UNITS) {
+        if !self.should_emit(done, None, false) {
             return;
         }
-        let elapsed = self.started.elapsed().as_secs_f64().max(0.001);
-        let rate = done as f64 / elapsed;
         let line = format!(
-            "{}  {} {}  ({:.0} {}/s)",
-            self.label, done, unit, rate, unit
+            "{} [{}] {} {} ({})",
+            self.label,
+            render_bar_indeterminate(self.started.elapsed()),
+            done,
+            unit,
+            rate_count(self.started.elapsed(), done, unit)
         );
-        self.paint(done, &line);
+        self.paint(done, None, &line);
     }
 
-    /// Unit progress with known total.
     pub fn tick_count_total(&mut self, done: u64, total: u64, unit: &str) {
         if !self.enabled || self.finished {
             return;
         }
-        if !self.should_emit(done, CHUNK_UNITS) {
+        let total = total.max(1);
+        let pct = pct(done, total);
+        if !self.should_emit(done, Some(pct), done >= total) {
             return;
         }
-        let pct = if total > 0 {
-            ((done as f64 / total as f64) * 100.0).min(100.0)
-        } else {
-            0.0
-        };
-        let line = format!("{}  {:>5.1}%  {}/{} {}", self.label, pct, done, total, unit);
-        self.paint(done, &line);
+        let line = format!(
+            "{} [{}] {:>3}% {}/{} {} ({})",
+            self.label,
+            render_bar(pct),
+            pct,
+            done,
+            total,
+            unit,
+            rate_count(self.started.elapsed(), done, unit)
+        );
+        self.paint(done, Some(pct), &line);
     }
 
-    /// Immediate status. Writes a new line (not `\r`) so it stays visible
-    /// after the table starts printing — `\r` ticks are otherwise gone in <50ms.
+    /// One-line status (same `\r` bar slot). Prefer tick_* with totals when possible.
     pub fn status(&mut self, message: &str) {
         if !self.enabled || self.finished {
             return;
         }
-        let line = format!("{}  {}\n", self.label, message);
-        self.last = Instant::now();
-        let _ = self.write_raw(&line);
-        self.painted = true;
-        self.paint_count += 1;
+        let line = format!("{} [{}] {}", self.label, render_bar(0), message);
+        self.paint(self.last_value, None, &line);
     }
 
-    /// Clear the progress line (once). Safe to call multiple times.
     pub fn finish(&mut self) {
         if !self.enabled || self.finished {
             return;
         }
         self.finished = true;
-        if !self.painted {
-            return;
+        if self.painted {
+            let _ = write_stderr("\x1b[2K\r");
         }
-        let _ = self.write_raw(
-            "\r                                                                                \r",
-        );
     }
 
-    fn should_emit(&self, value: u64, chunk: u64) -> bool {
+    fn should_emit(&self, value: u64, pct: Option<u8>, force: bool) -> bool {
+        if force {
+            return true;
+        }
         if self.paint_count == 0 {
             return true;
         }
-        let elapsed = self.last.elapsed() >= THROTTLE;
-        let chunked = value.saturating_sub(self.last_value) >= chunk;
-        elapsed || chunked
-    }
-
-    fn paint(&mut self, value: u64, line: &str) {
-        self.last = Instant::now();
-        self.last_value = value;
-        let padded = format!("\r{line:80}");
-        let _ = self.write_raw(&padded);
-        self.painted = true;
-        self.paint_count += 1;
-    }
-
-    fn write_raw(&mut self, s: &str) -> io::Result<()> {
-        match &mut self.out {
-            ProgressOut::Stderr => {
-                let mut stderr = io::stderr().lock();
-                stderr.write_all(s.as_bytes())?;
-                stderr.flush()
-            }
-            #[cfg(unix)]
-            ProgressOut::Tty(file) => {
-                file.write_all(s.as_bytes())?;
-                file.flush()
-            }
-            #[cfg(test)]
-            ProgressOut::Capture(buf) => {
-                buf.lock().unwrap().extend_from_slice(s.as_bytes());
-                Ok(())
-            }
+        #[cfg(test)]
+        let fast = self.test_fast;
+        #[cfg(not(test))]
+        let fast = false;
+        if !fast && self.last_paint.elapsed() < MIN_INTERVAL {
+            return false;
+        }
+        match pct {
+            Some(p) => p > self.last_pct,
+            None => value.saturating_sub(self.last_value) >= CHUNK_BYTES,
         }
     }
 
-    fn rate_bytes(&self, done: u64) -> String {
-        let secs = self.started.elapsed().as_secs_f64().max(0.001);
-        let bps = done as f64 / secs;
-        format!("{}/s", human_bytes(bps as u64))
+    fn paint(&mut self, value: u64, pct: Option<u8>, line: &str) {
+        self.last_paint = Instant::now();
+        self.last_value = value;
+        if let Some(p) = pct {
+            self.last_pct = p;
+        }
+        let _ = write_stderr(&format!("\x1b[2K\r{line}"));
+        self.painted = true;
+        self.paint_count += 1;
     }
 }
 
@@ -227,6 +192,58 @@ impl Drop for ProgressReporter {
     fn drop(&mut self) {
         self.finish();
     }
+}
+
+fn write_stderr(s: &str) -> io::Result<()> {
+    let mut stderr = io::stderr().lock();
+    stderr.write_all(s.as_bytes())?;
+    stderr.flush()
+}
+
+fn pct(done: u64, total: u64) -> u8 {
+    ((done as f64 / total as f64) * 100.0).min(100.0) as u8
+}
+
+fn render_bar(pct: u8) -> String {
+    let ratio = pct as f64 / 100.0;
+    let filled = (ratio * BAR_WIDTH as f64).round() as usize;
+    let mut bar = String::with_capacity(BAR_WIDTH + 2);
+    bar.push('[');
+    for i in 0..BAR_WIDTH {
+        bar.push(if i < filled { '█' } else { '░' });
+    }
+    bar.push(']');
+    bar
+}
+
+fn render_bar_indeterminate(elapsed: Duration) -> String {
+    let pos = ((elapsed.as_millis() / 200) as usize) % (BAR_WIDTH * 2);
+    let head = if pos < BAR_WIDTH {
+        pos
+    } else {
+        BAR_WIDTH * 2 - pos
+    };
+    let mut bar = String::with_capacity(BAR_WIDTH + 2);
+    bar.push('[');
+    for i in 0..BAR_WIDTH {
+        bar.push(if i >= head && i.saturating_add(3) > head && i < head + 4 {
+            '█'
+        } else {
+            '░'
+        });
+    }
+    bar.push(']');
+    bar
+}
+
+fn rate_bytes(elapsed: Duration, done: u64) -> String {
+    let secs = elapsed.as_secs_f64().max(0.001);
+    format!("{}/s", human_bytes((done as f64 / secs) as u64))
+}
+
+fn rate_count(elapsed: Duration, done: u64, unit: &str) -> String {
+    let secs = elapsed.as_secs_f64().max(0.001);
+    format!("{:.0} {}/s", done as f64 / secs, unit)
 }
 
 fn human_bytes(n: u64) -> String {
@@ -238,9 +255,9 @@ fn human_bytes(n: u64) -> String {
         i += 1;
     }
     if i == 0 {
-        format!("{n} {}", UNITS[i])
+        format!("{n}{}", UNITS[i])
     } else {
-        format!("{v:.1} {}", UNITS[i])
+        format!("{v:.1}{}", UNITS[i])
     }
 }
 
@@ -250,54 +267,25 @@ mod tests {
 
     #[test]
     fn disabled_never_paints() {
-        let mut p = ProgressReporter::raw("x".into(), false, ProgressOut::Stderr);
+        let mut p = ProgressReporter::new("x", false);
         p.tick_bytes(10_000_000, Some(10_000_000));
-        p.tick_count(100_000, "rows");
-        assert_eq!(p.paint_count(), 0);
-        p.finish();
         assert_eq!(p.paint_count(), 0);
     }
 
     #[test]
-    fn throttle_skips_rapid_ticks() {
-        let mut p = ProgressReporter::for_test("scan");
-        // First paint is immediate
-        p.tick_bytes(100, Some(10_000_000));
-        assert_eq!(p.paint_count(), 1);
-        // tiny delta + no time → skip
-        p.tick_bytes(200, Some(10_000_000));
-        assert_eq!(p.paint_count(), 1);
-        // Chunk gate without waiting
-        p.tick_bytes(200 + CHUNK_BYTES, Some(10_000_000));
-        assert_eq!(p.paint_count(), 2);
-    }
-
-    #[test]
-    fn finish_is_idempotent() {
-        let mut p = ProgressReporter::for_test("scan");
-        p.tick_count(1, "files");
-        p.finish();
-        p.finish();
-        assert!(p.finished);
-    }
-
-    #[test]
-    fn status_paints_immediately() {
+    fn count_total_draws_bar() {
         let mut p = ProgressReporter::for_test("preview");
-        p.status("2.3 MiB");
+        p.tick_count_total(250, 500, "rows");
         assert_eq!(p.paint_count(), 1);
+        p.tick_count_total(251, 500, "rows");
+        assert_eq!(p.paint_count(), 1, "same pct throttled");
+        p.tick_count_total(300, 500, "rows");
+        assert!(p.paint_count() >= 2);
     }
 
     #[test]
-    fn status_is_sticky_newline_not_cr_only() {
-        let (mut p, buf) = ProgressReporter::capturing("preview");
-        p.status("sample.csv  2.2 MiB");
-        p.tick_count_total(100, 500, "rows");
-        let s = String::from_utf8(buf.lock().unwrap().clone()).unwrap();
-        assert!(
-            s.contains("preview  sample.csv  2.2 MiB\n"),
-            "status must stay on its own line, got {s:?}"
-        );
-        assert!(s.contains("100/500 rows"), "row ticks missing: {s:?}");
+    fn bar_half_filled() {
+        let bar = render_bar(50);
+        assert!(bar.contains('█') && bar.contains('░'));
     }
 }

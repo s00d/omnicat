@@ -99,6 +99,11 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
     if options.allow_unsafe {
         config.inspect.allow_unsafe = true;
     }
+    if options.all {
+        config.inspect.no_limit = true;
+        config.inspect.max_bytes = 0;
+        config.inspect.max_rows = 0;
+    }
 
     let mut preview_ctx = content::preview_context(render_path);
     preview_ctx.sql_schema_only = options.schema_only;
