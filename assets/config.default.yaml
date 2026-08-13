@@ -35,7 +35,6 @@ terminal:
     hex_cols: 16
     show_metadata: true
   paginate:
-    enabled: false
     page_lines: 0
   document:
     max_chars: 5000

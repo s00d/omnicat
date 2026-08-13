@@ -11,6 +11,7 @@ pub mod stream;
 pub mod tail;
 
 use std::io::Read;
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -37,10 +38,10 @@ impl FileHandle {
         })
     }
 
-    /// Iterate lines according to the configured read mode.
+    /// Iterate lines. Return [`ControlFlow::Break`] from the callback to stop I/O early.
     pub fn for_each_line<F>(&self, mut f: F) -> Result<()>
     where
-        F: FnMut(LineRef<'_>) -> Result<()>,
+        F: FnMut(LineRef<'_>) -> Result<ControlFlow<()>>,
     {
         match self.options.mode {
             ReadMode::Stream => {
@@ -52,37 +53,53 @@ impl FileHandle {
                 let refs =
                     tail_lines(&self.path, lines, self.options.decompress).context("tail lines")?;
                 for line in refs {
-                    f(line)?;
+                    if matches!(f(line)?, ControlFlow::Break(())) {
+                        break;
+                    }
                 }
                 Ok(())
             }
             ReadMode::Follow { .. } => {
-                follow::follow_loop(&self.path, |line| {
-                    f(line).map_err(|e| std::io::Error::other(format!("{e:#}")))
+                follow::follow_loop(&self.path, |line| match f(line) {
+                    Ok(ControlFlow::Continue(())) => Ok(()),
+                    Ok(ControlFlow::Break(())) => Err(std::io::Error::other("follow break")),
+                    Err(e) => Err(std::io::Error::other(format!("{e:#}"))),
                 })?;
                 Ok(())
             }
             ReadMode::Mmap => {
                 let view = MmapView::open(&self.path)?;
                 for line in view.lines() {
-                    f(line)?;
+                    if matches!(f(line)?, ControlFlow::Break(())) {
+                        break;
+                    }
                 }
                 Ok(())
             }
         }
     }
 
-    fn stream_reader<R: Read, F: FnMut(LineRef<'_>) -> Result<()>>(
+    fn stream_reader<R: Read, F: FnMut(LineRef<'_>) -> Result<ControlFlow<()>>>(
         &self,
         reader: R,
         f: &mut F,
     ) -> Result<()> {
-        for item in LineIter::new(reader, self.options.max_scan_bytes) {
-            let (line_no, bytes) = item.context("read line")?;
-            f(LineRef {
-                bytes: &bytes,
-                line_no,
-            })?;
+        let mut iter = LineIter::new(reader, self.options.max_scan_bytes);
+        let mut err: Option<anyhow::Error> = None;
+        iter.visit_lines(|line_no, bytes| {
+            let line = LineRef { bytes, line_no };
+            match f(line) {
+                Ok(ControlFlow::Continue(())) => ControlFlow::Continue(()),
+                Ok(ControlFlow::Break(())) => ControlFlow::Break(()),
+                Err(e) => {
+                    err = Some(e);
+                    ControlFlow::Break(())
+                }
+            }
+        })
+        .context("read line")?;
+        if let Some(e) = err {
+            return Err(e);
         }
         Ok(())
     }
@@ -124,9 +141,31 @@ pub fn read_bytes_capped(path: &Path, max_bytes: usize, decompress: bool) -> Res
     Ok(buf)
 }
 
+/// Test helper: wrap a reader and count how many bytes were pulled.
+#[derive(Debug)]
+pub struct CountingReader<R> {
+    inner: R,
+    pub bytes: u64,
+}
+
+impl<R> CountingReader<R> {
+    pub fn new(inner: R) -> Self {
+        Self { inner, bytes: 0 }
+    }
+}
+
+impl<R: Read> Read for CountingReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.bytes += n as u64;
+        Ok(n)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn stream_reads_all_lines() {
@@ -137,10 +176,40 @@ mod tests {
         let mut lines = Vec::new();
         h.for_each_line(|l| {
             lines.push(l.text_lossy());
-            Ok(())
+            Ok(ControlFlow::Continue(()))
         })
         .unwrap();
         assert_eq!(lines, vec!["one", "two", "three"]);
+    }
+
+    #[test]
+    fn for_each_line_early_stop_limits_io() {
+        let mut body = String::from("MATCH\n");
+        while body.len() < 2 * 1024 * 1024 + 64 {
+            body.push_str("noise-line-xxxx\n");
+        }
+        let total = body.len() as u64;
+        let mut counter = CountingReader::new(Cursor::new(body.into_bytes()));
+        let mut hits = 0usize;
+        LineIter::new(&mut counter, None)
+            .visit_lines(|_, line| {
+                if line == b"MATCH" {
+                    hits += 1;
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                }
+            })
+            .unwrap();
+        assert_eq!(hits, 1);
+        // First fill may pull one CHUNK (1 MiB), but must not consume the whole 2+ MiB file.
+        assert!(
+            counter.bytes <= 1024 * 1024 + 4096,
+            "read too much: {} of {}",
+            counter.bytes,
+            total
+        );
+        assert!(counter.bytes < total / 2);
     }
 
     #[test]

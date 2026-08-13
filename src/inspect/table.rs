@@ -1,4 +1,4 @@
-use std::fs;
+use std::collections::VecDeque;
 use std::path::Path;
 
 use anyhow::{bail, Result};
@@ -6,6 +6,11 @@ use anyhow::{bail, Result};
 use crate::config::OmnicatConfig;
 use crate::detect::HandlerKind;
 use crate::inspect::report::InspectReport;
+
+enum RowMode {
+    First(usize),
+    Last(usize),
+}
 
 pub fn table_view(
     path: &Path,
@@ -16,8 +21,13 @@ pub fn table_view(
     head: Option<usize>,
     tail: Option<usize>,
 ) -> Result<InspectReport> {
-    let (headers, rows) = load_table(path, kind, config)?;
-    let total_rows = rows.len();
+    let mode = match (head, tail) {
+        (Some(n), _) => RowMode::First(n.max(1)),
+        (_, Some(n)) => RowMode::Last(n.max(1)),
+        _ => RowMode::First(crate::inspect::effective_max_rows(config).max(1)),
+    };
+
+    let (headers, rows, scanned) = load_table(path, kind, &mode)?;
     let total_cols = headers.len();
 
     if columns_only {
@@ -25,29 +35,23 @@ pub fn table_view(
             path: display.to_string(),
             headers: headers.clone(),
             rows: headers.iter().map(|h| vec![h.clone()]).collect(),
-            total_rows,
+            total_rows: scanned,
             total_cols,
             note: Some("columns".into()),
         });
     }
 
-    let sliced: Vec<Vec<String>> = match (head, tail) {
-        (Some(n), _) => rows.into_iter().take(n).collect(),
-        (_, Some(n)) => {
-            let skip = total_rows.saturating_sub(n);
-            rows.into_iter().skip(skip).collect()
-        }
-        _ => {
-            let max = crate::inspect::effective_max_rows(config);
-            rows.into_iter().take(max).collect()
-        }
-    };
-
-    let note = if sliced.len() < total_rows {
+    let note = if matches!(mode, RowMode::First(_)) && rows.len() < scanned {
         Some(format!(
-            "Showing {} of {} rows. Use --head/--tail/--all.",
-            sliced.len(),
-            total_rows
+            "Showing {} of {}+ rows. Use --head/--tail/--all.",
+            rows.len(),
+            scanned
+        ))
+    } else if matches!(mode, RowMode::Last(_)) && scanned > rows.len() {
+        Some(format!(
+            "Showing last {} of {} rows. Use --head/--all.",
+            rows.len(),
+            scanned
         ))
     } else {
         None
@@ -56,8 +60,8 @@ pub fn table_view(
     Ok(InspectReport::Table {
         path: display.to_string(),
         headers,
-        rows: sliced,
-        total_rows,
+        rows,
+        total_rows: scanned,
         total_cols,
         note,
     })
@@ -66,8 +70,8 @@ pub fn table_view(
 fn load_table(
     path: &Path,
     kind: HandlerKind,
-    _config: &OmnicatConfig,
-) -> Result<(Vec<String>, Vec<Vec<String>>)> {
+    mode: &RowMode,
+) -> Result<(Vec<String>, Vec<Vec<String>>, usize)> {
     match kind {
         HandlerKind::Data => {
             let ext = path
@@ -76,9 +80,9 @@ fn load_table(
                 .unwrap_or("")
                 .to_ascii_lowercase();
             match ext.as_str() {
-                "csv" => read_csv(path, b','),
-                "tsv" => read_csv(path, b'\t'),
-                "jsonl" | "ndjson" => read_jsonl(path),
+                "csv" => read_csv(path, b',', mode),
+                "tsv" => read_csv(path, b'\t', mode),
+                "jsonl" | "ndjson" => read_jsonl(path, mode),
                 _ => bail!("table view requires csv/tsv/jsonl"),
             }
         }
@@ -104,10 +108,11 @@ fn load_table(
                         .collect()
                 })
                 .unwrap_or_default();
-            let rows = rows_iter
-                .map(|r| r.iter().map(|c| format!("{c}")).collect())
-                .collect();
-            Ok((headers, rows))
+            Ok(collect_rows(
+                rows_iter.map(|r| r.iter().map(|c| format!("{c}")).collect()),
+                mode,
+            ))
+            .map(|(rows, scanned)| (headers, rows, scanned))
         }
         HandlerKind::Database => {
             use rusqlite::Connection;
@@ -136,52 +141,139 @@ fn load_table(
                 }
                 Ok(cells)
             })?;
-            let rows = mapped.filter_map(|r| r.ok()).collect();
-            Ok((headers, rows))
+            let iter = mapped.filter_map(|r| r.ok());
+            let (rows, scanned) = collect_rows(iter, mode);
+            Ok((headers, rows, scanned))
         }
         _ => bail!("table view not supported for {}", kind.name()),
     }
 }
 
-fn read_csv(path: &Path, delim: u8) -> Result<(Vec<String>, Vec<Vec<String>>)> {
-    let raw = fs::read_to_string(path)?;
+fn collect_rows<I>(iter: I, mode: &RowMode) -> (Vec<Vec<String>>, usize)
+where
+    I: Iterator<Item = Vec<String>>,
+{
+    let mut scanned = 0usize;
+    match mode {
+        RowMode::First(n) => {
+            let mut out = Vec::with_capacity(*n);
+            for row in iter {
+                scanned += 1;
+                if out.len() < *n {
+                    out.push(row);
+                }
+            }
+            (out, scanned)
+        }
+        RowMode::Last(n) => {
+            let mut ring = VecDeque::with_capacity(*n);
+            for row in iter {
+                scanned += 1;
+                if ring.len() == *n {
+                    ring.pop_front();
+                }
+                ring.push_back(row);
+            }
+            (ring.into_iter().collect(), scanned)
+        }
+    }
+}
+
+fn read_csv(
+    path: &Path,
+    delim: u8,
+    mode: &RowMode,
+) -> Result<(Vec<String>, Vec<Vec<String>>, usize)> {
+    let file = std::fs::File::open(path)?;
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(true)
         .delimiter(delim)
         .flexible(true)
-        .from_reader(raw.as_bytes());
+        .from_reader(file);
     let headers = rdr.headers()?.iter().map(|s| s.to_string()).collect();
-    let mut rows = Vec::new();
-    for rec in rdr.records() {
-        rows.push(rec?.iter().map(|s| s.to_string()).collect());
-    }
-    Ok((headers, rows))
+    let mut scanned = 0usize;
+    let rows = match mode {
+        RowMode::First(n) => {
+            let mut out = Vec::with_capacity(*n);
+            for rec in rdr.records() {
+                scanned += 1;
+                if out.len() < *n {
+                    out.push(rec?.iter().map(|s| s.to_string()).collect());
+                } else {
+                    // Still count remaining rows for the note without storing them.
+                    for rest in rdr.records() {
+                        let _ = rest?;
+                        scanned += 1;
+                    }
+                    break;
+                }
+            }
+            out
+        }
+        RowMode::Last(n) => {
+            let mut ring = VecDeque::with_capacity(*n);
+            for rec in rdr.records() {
+                scanned += 1;
+                if ring.len() == *n {
+                    ring.pop_front();
+                }
+                ring.push_back(rec?.iter().map(|s| s.to_string()).collect());
+            }
+            ring.into_iter().collect()
+        }
+    };
+    Ok((headers, rows, scanned))
 }
 
-fn read_jsonl(path: &Path) -> Result<(Vec<String>, Vec<Vec<String>>)> {
+fn read_jsonl(path: &Path, mode: &RowMode) -> Result<(Vec<String>, Vec<Vec<String>>, usize)> {
     use crate::content::{cell_value, plan_columns};
     use crate::io::{FileHandle, OpenOptions};
 
     let mut keys: Vec<String> = Vec::new();
     let mut key_set = std::collections::BTreeSet::new();
-    let mut objects = Vec::new();
+    let mut scanned = 0usize;
+    let mut first: Vec<serde_json::Map<String, serde_json::Value>> = Vec::new();
+    let mut ring: VecDeque<serde_json::Map<String, serde_json::Value>> = VecDeque::new();
+    let cap = match mode {
+        RowMode::First(n) | RowMode::Last(n) => *n,
+    };
+
     FileHandle::open(path, OpenOptions::stream())?.for_each_line(|line| {
         let text = line.as_str().unwrap_or("").trim();
         if text.is_empty() {
-            return Ok(());
+            return Ok(std::ops::ControlFlow::Continue(()));
         }
-        if let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(text)
-        {
-            for k in map.keys() {
-                if key_set.insert(k.clone()) {
-                    keys.push(k.clone());
+        let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(text)
+        else {
+            return Ok(std::ops::ControlFlow::Continue(()));
+        };
+        scanned += 1;
+        for k in map.keys() {
+            if key_set.insert(k.clone()) {
+                keys.push(k.clone());
+            }
+        }
+        match mode {
+            RowMode::First(_) => {
+                if first.len() < cap {
+                    first.push(map);
                 }
             }
-            objects.push(map);
+            RowMode::Last(_) => {
+                if ring.len() == cap {
+                    ring.pop_front();
+                }
+                ring.push_back(map);
+            }
         }
-        Ok(())
+        Ok(std::ops::ControlFlow::Continue(()))
     })?;
+
     let cols = plan_columns(&keys);
+    let objects: Vec<_> = match mode {
+        RowMode::First(_) => first,
+        RowMode::Last(_) => ring.into_iter().collect(),
+    };
     let rows = objects
         .into_iter()
         .map(|map| {
@@ -191,5 +283,5 @@ fn read_jsonl(path: &Path) -> Result<(Vec<String>, Vec<Vec<String>>)> {
                 .collect()
         })
         .collect();
-    Ok((cols.headers, rows))
+    Ok((cols.headers, rows, scanned))
 }

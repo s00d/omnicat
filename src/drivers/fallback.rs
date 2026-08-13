@@ -34,12 +34,8 @@ impl PreviewDriver for FallbackDriver {
         ctx: &PreviewContext,
     ) -> Result<PreviewContent> {
         let max = config.terminal.fallback.max_bytes;
-        let bytes = std::fs::read(path)?;
-        let slice = if bytes.len() > max {
-            &bytes[..max]
-        } else {
-            &bytes[..]
-        };
+        let bytes = crate::io::read_bytes_capped(path, max, false)?;
+        let slice = &bytes[..];
 
         // Unknown, but readable as text: show it as text and try to
         // syntax-highlight it based on what the content looks like.
@@ -61,7 +57,7 @@ impl PreviewDriver for FallbackDriver {
             let mime = ctx
                 .mime
                 .clone()
-                .or_else(|| infer::get(&bytes).map(|kind| kind.mime_type().to_string()))
+                .or_else(|| infer::get(slice).map(|kind| kind.mime_type().to_string()))
                 .unwrap_or_else(|| "unknown (binary data)".to_string());
             format!(
                 "file: {}\nsize: {} bytes\nmime: {}",

@@ -184,6 +184,12 @@ pub struct PreviewContext {
     pub path: PathBuf,
     pub mime: Option<String>,
     pub size: u64,
+    /// SQL dump: structure only (no INSERT data section).
+    pub sql_schema_only: bool,
+    /// SQL dump: filter to one table name.
+    pub sql_table: Option<String>,
+    /// Show throttled stderr progress while streaming tabular preview.
+    pub progress: bool,
 }
 
 pub fn preview_context(path: &std::path::Path) -> PreviewContext {
@@ -200,5 +206,8 @@ pub fn preview_context(path: &std::path::Path) -> PreviewContext {
         path: path.to_path_buf(),
         mime,
         size,
+        sql_schema_only: false,
+        sql_table: None,
+        progress: false,
     }
 }

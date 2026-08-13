@@ -35,6 +35,8 @@ pub struct InspectOptions {
     pub json: bool,
     pub info: bool,
     pub schema: bool,
+    /// SQL dump table filter (also used for File routing).
+    pub table: Option<String>,
     pub stats: bool,
     pub type_only: bool,
     pub mime_only: bool,
@@ -56,12 +58,15 @@ pub struct InspectOptions {
     pub diff: Option<(String, String)>,
     pub allow_unsafe: bool,
     pub all: bool,
+    /// Throttled stderr progress for long scans (`--find`, dump `-q`, `--hash`, …).
+    pub progress: bool,
 }
 
 impl InspectOptions {
     pub fn is_inspect_mode(&self) -> bool {
         self.info
             || self.schema
+            || self.table.is_some()
             || self.stats
             || self.type_only
             || self.mime_only
@@ -86,6 +91,7 @@ impl InspectOptions {
     pub fn has_action(&self) -> bool {
         self.info
             || self.schema
+            || self.table.is_some()
             || self.stats
             || self.type_only
             || self.mime_only
@@ -104,6 +110,32 @@ impl InspectOptions {
             || self.hash
             || self.duplicates
             || self.diff.is_some()
+    }
+
+    /// True when only `--schema` and/or `--table` are set (SQL dump preview modes).
+    pub fn is_sql_dump_view_only(&self) -> bool {
+        if !self.schema && self.table.is_none() {
+            return false;
+        }
+        !self.info
+            && !self.stats
+            && !self.type_only
+            && !self.mime_only
+            && !self.encoding
+            && !self.capabilities
+            && self.find.is_none()
+            && self.query.is_none()
+            && self.where_clause.is_none()
+            && !self.columns
+            && self.head.is_none()
+            && self.tail.is_none()
+            && !self.watch
+            && !self.follow
+            && !self.text
+            && !self.raw
+            && !self.hash
+            && !self.duplicates
+            && self.diff.is_none()
     }
 }
 
@@ -234,13 +266,18 @@ fn run_inspect_path_str(
     }
 
     if options.hash {
-        let report = InspectReport::Hash(hash::build_hash(path, &display, config)?);
+        let report =
+            InspectReport::Hash(hash::build_hash(path, &display, config, options.progress)?);
         return emit(&report, options, config);
     }
 
     if options.duplicates {
-        let report =
-            InspectReport::Duplicates(duplicates::build_duplicates(path, &display, config)?);
+        let report = InspectReport::Duplicates(duplicates::build_duplicates(
+            path,
+            &display,
+            config,
+            options.progress,
+        )?);
         return emit(&report, options, config);
     }
 
@@ -255,7 +292,14 @@ fn run_inspect_path_str(
     }
 
     if let Some(q) = &options.find {
-        let report = InspectReport::Find(find::build_find(path, &display, kind, q, config)?);
+        let report = InspectReport::Find(find::build_find(
+            path,
+            &display,
+            kind,
+            q,
+            config,
+            options.progress,
+        )?);
         return emit(&report, options, config);
     }
 
@@ -264,7 +308,14 @@ fn run_inspect_path_str(
         .clone()
         .or_else(|| options.where_clause.clone());
     if let Some(q) = query {
-        let report = InspectReport::Query(query::build_query(path, &display, kind, &q, config)?);
+        let report = InspectReport::Query(query::build_query(
+            path,
+            &display,
+            kind,
+            &q,
+            config,
+            options.progress,
+        )?);
         return emit(&report, options, config);
     }
 

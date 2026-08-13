@@ -10,28 +10,42 @@ use sha2::{Sha256, Sha512};
 
 use crate::config::OmnicatConfig;
 use crate::inspect::report::{human_size, HashReport};
+use crate::sinks::progress::ProgressReporter;
 
 const CHUNK: usize = 64 * 1024;
 
-pub fn build_hash(path: &Path, display: &str, config: &OmnicatConfig) -> Result<HashReport> {
+pub fn build_hash(
+    path: &Path,
+    display: &str,
+    config: &OmnicatConfig,
+    progress: bool,
+) -> Result<HashReport> {
+    let mut progress = ProgressReporter::new("hash", progress);
     let meta = fs::symlink_metadata(path).with_context(|| format!("stat {}", path.display()))?;
-    if meta.is_dir() {
-        hash_directory(path, display, config)
+    let report = if meta.is_dir() {
+        hash_directory(path, display, config, &mut progress)
     } else if meta.is_file() {
-        hash_file(path, display, config)
+        hash_file(path, display, config, &mut progress)
     } else {
         bail!("hash not supported for special file {}", path.display());
-    }
+    };
+    progress.finish();
+    report
 }
 
-fn hash_file(path: &Path, display: &str, config: &OmnicatConfig) -> Result<HashReport> {
+fn hash_file(
+    path: &Path,
+    display: &str,
+    config: &OmnicatConfig,
+    progress: &mut ProgressReporter,
+) -> Result<HashReport> {
     let size = fs::metadata(path)?.len();
     let max = if config.inspect.no_limit || config.inspect.max_bytes == 0 {
         None
     } else {
         Some(config.inspect.max_bytes as u64)
     };
-    let digests = hash_bytes_streaming(path, max)?;
+    let digests = hash_bytes_streaming(path, max, progress, Some(size))?;
     let truncated = max.map(|m| size > m).unwrap_or(false);
     Ok(HashReport {
         path: display.to_string(),
@@ -56,7 +70,12 @@ fn hash_file(path: &Path, display: &str, config: &OmnicatConfig) -> Result<HashR
     })
 }
 
-fn hash_directory(path: &Path, display: &str, config: &OmnicatConfig) -> Result<HashReport> {
+fn hash_directory(
+    path: &Path,
+    display: &str,
+    config: &OmnicatConfig,
+    progress: &mut ProgressReporter,
+) -> Result<HashReport> {
     let mut files: Vec<PathBuf> = Vec::new();
     collect_files(path, path, &mut files, 0)?;
     files.sort();
@@ -70,14 +89,16 @@ fn hash_directory(path: &Path, display: &str, config: &OmnicatConfig) -> Result<
     let mut hasher = blake3::Hasher::new();
     let mut total_size = 0u64;
     let mut truncated = false;
-    for rel in &files {
+    let total_files = files.len() as u64;
+    for (i, rel) in files.iter().enumerate() {
+        progress.tick_count_total((i + 1) as u64, total_files, "files");
         let abs = path.join(rel);
         let size = fs::metadata(&abs).map(|m| m.len()).unwrap_or(0);
         total_size = total_size.saturating_add(size);
         if max.is_some_and(|m| size > m) {
             truncated = true;
         }
-        let digests = hash_bytes_streaming(&abs, max)?;
+        let digests = hash_bytes_streaming(&abs, max, progress, None)?;
         // Deterministic: relative path (posix) + blake3 of content
         hasher.update(rel.to_string_lossy().replace('\\', "/").as_bytes());
         hasher.update(&[0]);
@@ -133,7 +154,12 @@ struct Digests {
     blake3: String,
 }
 
-fn hash_bytes_streaming(path: &Path, max_bytes: Option<u64>) -> Result<Digests> {
+fn hash_bytes_streaming(
+    path: &Path,
+    max_bytes: Option<u64>,
+    progress: &mut ProgressReporter,
+    total: Option<u64>,
+) -> Result<Digests> {
     use std::fs::File;
     use std::io::Read;
 
@@ -145,6 +171,7 @@ fn hash_bytes_streaming(path: &Path, max_bytes: Option<u64>) -> Result<Digests> 
     let mut blake = blake3::Hasher::new();
     let mut buf = [0u8; CHUNK];
     let mut remaining = max_bytes;
+    let mut done = 0u64;
     loop {
         let to_read = match remaining {
             Some(0) => break,
@@ -161,6 +188,10 @@ fn hash_bytes_streaming(path: &Path, max_bytes: Option<u64>) -> Result<Digests> 
         sha256.update(chunk);
         sha512.update(chunk);
         blake.update(chunk);
+        done = done.saturating_add(n as u64);
+        if total.is_some() {
+            progress.tick_bytes(done, total);
+        }
         if let Some(r) = remaining.as_mut() {
             *r = r.saturating_sub(n as u64);
         }
@@ -175,8 +206,12 @@ fn hash_bytes_streaming(path: &Path, max_bytes: Option<u64>) -> Result<Digests> 
 }
 
 /// Content hash used by `--duplicates` (BLAKE3 of full file, respecting max_bytes).
-pub fn file_blake3(path: &Path, max_bytes: Option<u64>) -> Result<String> {
-    Ok(hash_bytes_streaming(path, max_bytes)?.blake3)
+pub fn file_blake3(
+    path: &Path,
+    max_bytes: Option<u64>,
+    progress: &mut ProgressReporter,
+) -> Result<String> {
+    Ok(hash_bytes_streaming(path, max_bytes, progress, None)?.blake3)
 }
 
 #[cfg(test)]
@@ -189,7 +224,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("x.bin");
         std::fs::write(&path, b"abc").unwrap();
-        let report = build_hash(&path, "x.bin", &OmnicatConfig::default()).unwrap();
+        let report = build_hash(&path, "x.bin", &OmnicatConfig::default(), false).unwrap();
         assert_eq!(report.md5, "900150983cd24fb0d6963f7d28e17f72");
         assert!(!report.blake3.is_empty());
         assert!(!report.sha256.is_empty());
@@ -201,8 +236,8 @@ mod tests {
         std::fs::write(dir.path().join("a.txt"), b"a").unwrap();
         std::fs::write(dir.path().join("b.txt"), b"b").unwrap();
         let cfg = OmnicatConfig::default();
-        let h1 = build_hash(dir.path(), "d", &cfg).unwrap().blake3;
-        let h2 = build_hash(dir.path(), "d", &cfg).unwrap().blake3;
+        let h1 = build_hash(dir.path(), "d", &cfg, false).unwrap().blake3;
+        let h2 = build_hash(dir.path(), "d", &cfg, false).unwrap().blake3;
         assert_eq!(h1, h2);
         assert!(h1.len() >= 32);
     }

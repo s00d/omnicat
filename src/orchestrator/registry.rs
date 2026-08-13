@@ -104,10 +104,18 @@ impl DriverRegistry {
     }
 
     pub fn build(kind: HandlerKind, path: &Path, config: &OmnicatConfig) -> Result<PreviewContent> {
+        Self::build_with_ctx(kind, path, config, &preview_context(path))
+    }
+
+    pub fn build_with_ctx(
+        kind: HandlerKind,
+        path: &Path,
+        config: &OmnicatConfig,
+        ctx: &crate::content::PreviewContext,
+    ) -> Result<PreviewContent> {
         let driver =
             Self::driver_for(kind).ok_or_else(|| anyhow::anyhow!("no driver for {kind}"))?;
-        let ctx = preview_context(path);
-        driver.build(path, config, &ctx)
+        driver.build(path, config, ctx)
     }
 
     pub fn extensions_for(kind: HandlerKind) -> Vec<&'static str> {

@@ -1,12 +1,12 @@
 # Demo fixtures for omnicat
 
-Sample files for manual testing of terminal preview and `--preview` GUI.
+Sample files for manual testing of terminal preview, `--preview` GUI, and inspect (`--find`, `-q`, …).
 
 ## Demo GIF
 
 ![omnicat terminal demo](omnicat-demo.gif)
 
-Shows markdown, code, CSV, `db --query`, `log --stats`, directory tree, and `--status`. Commands are recorded hidden so the GIF focuses on output.
+Shows markdown, code, CSV, directory tree, and `--status`. Commands are recorded hidden so the GIF focuses on output.
 
 Tape uses `echo` for section labels (bare `#` lines are shell comments in zsh). Terminal code theme defaults to `auto`, which detects the terminal background and picks a readable theme (dark or light).
 
@@ -47,6 +47,12 @@ $BIN demo/files/sample.md
 $BIN demo/files/sample.rs
 $BIN --preview demo/files/sample.md
 
+# Search / query
+$BIN demo/db/sample.sql -q "SELECT * FROM users WHERE status = 'ok'"
+$BIN demo/db/sample.sql -f "status = 'ok' AND id > 1"
+$BIN demo/log/json.log -f 'level:error'
+$BIN demo/log/logfmt.log -f "job_id > 42"
+
 # All handlers (prints detected kind)
 for f in demo/files/* demo/dir-tree; do
   echo "=== $f ==="
@@ -60,7 +66,7 @@ done
 |---------|------|-------|
 | markdown | `files/sample.md` | GFM source |
 | code | `files/sample.rs`, `sample.py` | syntax highlight |
-| data | `files/sample.json`, `.yaml`, `.toml`, `.ini`, `.csv`, `.tsv` | |
+| data | `files/sample.json`, `.yaml`, `.toml`, `.ini`, `.csv`, `.tsv`, `sample-large.csv` | large csv via generate |
 | image | `files/sample.png`, `sample-icon.png`, `sample-wide.png`, `sample.gif` | generated |
 | pdf | `files/sample.pdf` | generated |
 | archive | `files/sample.zip`, `sample.tar`, `sample.tar.gz`, `sample.cbz` | tree widget |
@@ -71,7 +77,7 @@ done
 | ebook | `files/sample.epub`, `sample.fb2`, `sample.mobi`, `sample.azw3`, `sample-large.mobi` | epub/mobi/fb2 → Markdown; large mobi needs calibre to generate |
 | media | `files/sample.wav` (+ `.mp3`, `.flac`, `.ogg` via ffmpeg) | playback + progress in TTY |
 | font | `files/sample.ttf` | copied system font (after generate) |
-| database | `files/sample.sqlite` | generated |
+| database | `files/sample.sqlite` | generated; use `-q` / `-f` |
 | email | `files/sample.eml` | Markdown preview |
 | notebook | `files/sample.ipynb` | Markdown cells |
 | plist | `files/sample.plist` | |
@@ -80,12 +86,9 @@ done
 
 ## DB / log fixtures
 
-`demo/db/` and `demo/log/` are sample files. `omnicat demo/db/sample.sql` shows a dump overview. No `log`/`db` subcommands.
+No `log` / `db` subcommands — preview the file and use inspect flags.
 
-
-## Database inspector (`omnicat db`)
-
-Fixtures under `demo/db/`:
+### `demo/db/`
 
 | Kind | Path |
 |------|------|
@@ -95,9 +98,30 @@ Fixtures under `demo/db/`:
 | MySQL datadir | `db/mysql-datadir/` |
 
 ```bash
-omnicat db demo/db/sample.sql --query 'SELECT * FROM users LIMIT 3'
-omnicat db demo/db/sample.rdb --stats
-./demo/smoke-log-db.sh
+omnicat demo/db/sample.sql
+omnicat demo/db/sample.sql --schema
+omnicat demo/db/sample.sql --table users
+omnicat demo/db/sample.sql -q 'SELECT * FROM users LIMIT 3'
+omnicat demo/db/sample.sql -f "status = 'ok'"
+omnicat demo/files/sample.sqlite -q 'SELECT * FROM users LIMIT 3'
 ```
+
+### `demo/log/`
+
+| File | Format |
+|------|--------|
+| `log/json.log` | JSON lines |
+| `log/logfmt.log` | logfmt `key=value` |
+| `log/tracing.log` | timestamp + logfmt |
+| `log/text.log` | plain text (substring only) |
+| `log/nginx.log` | access log (substring) |
+
+```bash
+omnicat demo/log/json.log -f 'level:error'
+omnicat demo/log/logfmt.log -f "service = 'worker' AND level = 'error'"
+omnicat demo/log/text.log -f 'disk full'
+```
+
+See the main [README — Search & query](../README.md#search--query) for predicate syntax and dump `-q` limits.
 
 Legacy `.doc` uses anydoc (real Word binaries). The bundled `sample.doc` is a minimal OLE stub for detection only — expect Unsupported.

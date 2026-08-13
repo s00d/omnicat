@@ -80,9 +80,7 @@ pub struct TerminalDocumentDisplay {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PaginateDisplay {
-    #[serde(default)]
-    pub enabled: bool,
-    /// Lines per page (0 = fit to terminal height).
+    /// Lines per page (0 = terminal height − 1, or 50 if unknown).
     #[serde(default)]
     pub page_lines: u16,
 }

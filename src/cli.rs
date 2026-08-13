@@ -13,7 +13,15 @@ pub struct FileOptions {
     pub preview: bool,
     pub preview_only: bool,
     pub paginate: bool,
+    /// 1-based page when using static pagination (`--page`).
+    pub page: Option<usize>,
     pub allow_unsafe: bool,
+    /// SQL dump: show CREATE structure only (no INSERT rows).
+    pub schema_only: bool,
+    /// SQL dump: preview a single table by name.
+    pub table: Option<String>,
+    /// Throttled stderr progress while streaming tabular preview.
+    pub progress: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -94,8 +102,13 @@ Examples:
   omnicat -f TODO archive.zip
   omnicat db.sqlite -q 'SELECT * FROM users LIMIT 5'
   omnicat backup.sql
+  omnicat backup.sql --schema
+  omnicat backup.sql --table users
+  omnicat backup.sql -q \"SELECT * FROM users LIMIT 5\" --progress
+  omnicat notes.epub --paginate
+  omnicat notes.epub --page 3
   omnicat -d a.json b.json
-  omnicat --hash file.bin
+  omnicat --hash file.bin --progress
   omnicat --duplicates ~/Downloads
   omnicat --capabilities
   omnicat --status
@@ -113,9 +126,13 @@ struct PreviewOpts {
     #[arg(long = "preview-only")]
     preview_only: bool,
 
-    /// Interactive pager for long terminal output
+    /// Print one page of terminal output (page 1) with a page footer
     #[arg(short = 'g', long = "paginate")]
     paginate: bool,
+
+    /// Print page N of terminal output (1-based; implies paging)
+    #[arg(long = "page", value_name = "N")]
+    page: Option<usize>,
 }
 
 /// Machine-output and safety knobs (shared via flatten).
@@ -133,6 +150,10 @@ struct OutputOpts {
     /// Allow raw control / escape characters in text output
     #[arg(short = 'u', long = "unsafe")]
     allow_unsafe: bool,
+
+    /// Show throttled progress on stderr for long scans
+    #[arg(long = "progress")]
+    progress: bool,
 }
 
 /// Artifact inspector options (shared via flatten).
@@ -146,6 +167,10 @@ struct InspectOpts {
     /// Schema / structure summary
     #[arg(long = "schema")]
     schema: bool,
+
+    /// SQL dump: show a single table (structure + data)
+    #[arg(long = "table", value_name = "NAME")]
+    table: Option<String>,
 
     /// Aggregate stats
     #[arg(long = "stats")]
@@ -317,6 +342,26 @@ impl OmniCli {
                     args: os_to_strings(&normalized[1..]),
                 };
             }
+            // SQL dumps: --schema / --table are preview modes, not SQLite inspect.
+            if paths.len() == 1 && is_sql_dump_path(&paths[0]) && options.is_sql_dump_view_only() {
+                let mut file_opts = FileOptions {
+                    preview: self.preview.preview || self.preview.preview_only,
+                    preview_only: self.preview.preview_only,
+                    paginate: self.preview.paginate,
+                    page: self.preview.page,
+                    allow_unsafe: self.output.allow_unsafe,
+                    schema_only: options.schema,
+                    table: options.table.clone(),
+                    progress: self.output.progress,
+                };
+                if file_opts.preview_only {
+                    file_opts.preview = true;
+                }
+                return Command::File {
+                    path: paths[0].clone(),
+                    options: file_opts,
+                };
+            }
             return Command::Inspect {
                 path: paths.first().cloned(),
                 options,
@@ -333,7 +378,11 @@ impl OmniCli {
             preview: self.preview.preview || self.preview.preview_only,
             preview_only: self.preview.preview_only,
             paginate: self.preview.paginate,
+            page: self.preview.page,
             allow_unsafe: self.output.allow_unsafe,
+            schema_only: false,
+            table: None,
+            progress: self.output.progress,
         };
         if file_opts.preview_only {
             file_opts.preview = true;
@@ -346,12 +395,27 @@ impl OmniCli {
     }
 }
 
+fn is_sql_dump_path(path: &str) -> bool {
+    let name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(path)
+        .to_ascii_lowercase();
+    name.ends_with(".sql")
+        || name.ends_with(".sql.gz")
+        || name.ends_with(".sql.zst")
+        || name.ends_with(".sql.zstd")
+        || name.ends_with(".sql.bz2")
+        || name.ends_with(".sql.xz")
+}
+
 impl InspectOptions {
     fn from_clap(inspect: &InspectOpts, output: &OutputOpts) -> Self {
         Self {
             json: output.json,
             info: inspect.info,
             schema: inspect.schema,
+            table: inspect.table.clone(),
             stats: inspect.stats,
             type_only: inspect.type_only,
             mime_only: inspect.mime_only,
@@ -373,6 +437,7 @@ impl InspectOptions {
             diff: None,
             allow_unsafe: output.allow_unsafe,
             all: output.all,
+            progress: output.progress,
         }
     }
 }
@@ -450,6 +515,69 @@ mod tests {
             Command::File { path, .. } => assert_eq!(path, "log"),
             Command::Native { .. } => {}
             other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn sql_dump_schema_routes_to_file() {
+        match parse(&["backup.sql", "--schema"]) {
+            Command::File { path, options } => {
+                assert_eq!(path, "backup.sql");
+                assert!(options.schema_only);
+                assert!(options.table.is_none());
+            }
+            other => panic!("expected file, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn sql_dump_table_routes_to_file() {
+        match parse(&["backup.sql", "--table", "users"]) {
+            Command::File { path, options } => {
+                assert_eq!(path, "backup.sql");
+                assert!(!options.schema_only);
+                assert_eq!(options.table.as_deref(), Some("users"));
+            }
+            other => panic!("expected file, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn sqlite_schema_stays_inspect() {
+        match parse(&["db.sqlite", "--schema"]) {
+            Command::Inspect { path, options } => {
+                assert_eq!(path.as_deref(), Some("db.sqlite"));
+                assert!(options.schema);
+            }
+            other => panic!("expected inspect, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn paginate_and_page_on_file() {
+        match parse(&["README.md", "--paginate"]) {
+            Command::File { options, .. } => {
+                assert!(options.paginate);
+                assert!(options.page.is_none());
+            }
+            other => panic!("expected file, got {other:?}"),
+        }
+        match parse(&["README.md", "--page", "3"]) {
+            Command::File { options, .. } => {
+                assert_eq!(options.page, Some(3));
+            }
+            other => panic!("expected file, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn progress_flag_on_inspect() {
+        match parse(&["backup.sql", "-f", "status:ok", "--progress"]) {
+            Command::Inspect { options, .. } => {
+                assert!(options.find.is_some());
+                assert!(options.progress);
+            }
+            other => panic!("expected inspect, got {other:?}"),
         }
     }
 }

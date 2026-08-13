@@ -7,6 +7,7 @@ use rusqlite::Connection;
 use crate::config::OmnicatConfig;
 use crate::detect::HandlerKind;
 use crate::inspect::report::QueryReport;
+use crate::sinks::progress::ProgressReporter;
 
 pub fn build_query(
     path: &Path,
@@ -14,16 +15,48 @@ pub fn build_query(
     kind: HandlerKind,
     query: &str,
     config: &OmnicatConfig,
+    progress: bool,
 ) -> Result<QueryReport> {
     let query = query.trim();
     if query.is_empty() {
         bail!("empty query");
     }
-    match kind {
-        HandlerKind::Database => query_sqlite(path, display, query, config),
+    let mut progress = ProgressReporter::new("query", progress);
+    let result = match kind {
+        HandlerKind::Database => {
+            if crate::drivers::sql_dump::is_sql_dump_path(path) {
+                query_sql_dump(path, display, query, config, &mut progress)
+            } else {
+                query_sqlite(path, display, query, config)
+            }
+        }
         HandlerKind::Data => query_data(path, display, query, config),
         _ => bail!("query not supported for {}", kind.name()),
-    }
+    };
+    progress.finish();
+    result
+}
+
+fn query_sql_dump(
+    path: &Path,
+    display: &str,
+    query: &str,
+    config: &OmnicatConfig,
+    progress: &mut ProgressReporter,
+) -> Result<QueryReport> {
+    use crate::drivers::sql_dump::{parse_dump_select, query_sql_dump as run_dump_query};
+
+    let select = parse_dump_select(query)?;
+    let max_rows = crate::inspect::effective_max_rows(config);
+    let out = run_dump_query(path, &select, config, max_rows, progress)?;
+    Ok(QueryReport {
+        path: display.to_string(),
+        query: query.to_string(),
+        headers: Some(out.headers),
+        rows: Some(out.rows),
+        json: None,
+        text: None,
+    })
 }
 
 fn query_sqlite(
@@ -118,19 +151,19 @@ fn query_jsonl(
     let handle = FileHandle::open(path, OpenOptions::stream())?;
     handle.for_each_line(|line| {
         if out.len() >= max {
-            return Ok(());
+            return Ok(std::ops::ControlFlow::Break(()));
         }
         let text = line.as_str().unwrap_or("").trim();
         if text.is_empty() {
-            return Ok(());
+            return Ok(std::ops::ControlFlow::Continue(()));
         }
         let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
-            return Ok(());
+            return Ok(std::ops::ControlFlow::Continue(()));
         };
         if row_matches_predicate(&value, query)? {
             out.push(value);
         }
-        Ok(())
+        Ok(std::ops::ControlFlow::Continue(()))
     })?;
     let json = serde_json::Value::Array(out);
     Ok(QueryReport {
@@ -150,12 +183,12 @@ fn query_csv(
     delim: u8,
     config: &OmnicatConfig,
 ) -> Result<QueryReport> {
-    let raw = fs::read_to_string(path)?;
+    let file = fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(true)
         .delimiter(delim)
         .flexible(true)
-        .from_reader(raw.as_bytes());
+        .from_reader(file);
     let headers: Vec<String> = rdr.headers()?.iter().map(|s| s.to_string()).collect();
     let pred = parse_csv_predicate(query, &headers)?;
     let mut rows = Vec::new();
@@ -417,38 +450,16 @@ fn apply_select(value: serde_json::Value, pred: &str) -> Result<serde_json::Valu
 
 /// Match a JSON object against a find/query predicate (`level:error`, `field == "x"`, …).
 pub(crate) fn row_matches_predicate(value: &serde_json::Value, pred: &str) -> Result<bool> {
-    let pred = pred.trim().trim_start_matches('.');
-    // field == "x" | field != "x" | field > N
-    let ops = ["==", "!=", ">=", "<=", ">", "<"];
-    for op in ops {
-        if let Some((left, right)) = pred.split_once(op) {
-            let field = left.trim().trim_start_matches('.');
-            let rhs = right.trim().trim_matches('"').trim_matches('\'');
-            let lhs = value.get(field).cloned().unwrap_or(serde_json::Value::Null);
-            return Ok(compare_values(&lhs, op, rhs));
-        }
+    let find = crate::search::parse_find_pattern(pred)?;
+    if let Some(p) = &find.pred {
+        let row = crate::search::json_object_fields(value);
+        return Ok(crate::search::eval_pred(p, &row));
     }
-    // field:value shorthand (level:error, service:api)
-    if let Some((left, right)) = pred.split_once(':') {
-        let field = left.trim();
-        let rhs = right.trim();
-        if !field.is_empty()
-            && !rhs.is_empty()
-            && !field.contains(' ')
-            && value.get(field).is_some()
-        {
-            let lhs = value.get(field).cloned().unwrap_or(serde_json::Value::Null);
-            return Ok(compare_values(&lhs, "==", rhs));
-        }
-    }
-    // bare field truthiness
-    if let Some(v) = value.get(pred) {
-        return Ok(match v {
-            serde_json::Value::Null => false,
-            serde_json::Value::Bool(b) => *b,
-            serde_json::Value::String(s) => !s.is_empty(),
-            _ => true,
-        });
+    if let Some(q) = &find.substring {
+        return Ok(value
+            .to_string()
+            .to_ascii_lowercase()
+            .contains(&q.to_ascii_lowercase()));
     }
     Ok(false)
 }

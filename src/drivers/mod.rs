@@ -27,6 +27,7 @@ pub mod notebook;
 pub mod office;
 pub mod pdf;
 pub mod plist;
+pub(crate) mod sql_dump;
 pub mod theme;
 
 pub trait PreviewDriver: Send + Sync {

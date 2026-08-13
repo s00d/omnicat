@@ -468,6 +468,35 @@ def write_large_epub(path: Path, pages: int = 100) -> None:
             zf.writestr(name, content, compress_type=zipfile.ZIP_DEFLATED)
 
 
+def write_large_csv(path: Path, rows: int = 50_000) -> None:
+    """Wide-ish CSV for pagination / max_rows / streaming stress tests."""
+    cities = [
+        ("Tokyo", "Japan"),
+        ("Delhi", "India"),
+        ("Shanghai", "China"),
+        ("Sao Paulo", "Brazil"),
+        ("Cairo", "Egypt"),
+        ("Mexico City", "Mexico"),
+        ("Dhaka", "Bangladesh"),
+        ("Osaka", "Japan"),
+        ("New York", "USA"),
+        ("Karachi", "Pakistan"),
+        ("Buenos Aires", "Argentina"),
+        ("Chongqing", "China"),
+        ("Istanbul", "Turkey"),
+        ("Kolkata", "India"),
+        ("Lagos", "Nigeria"),
+    ]
+    with path.open("w", encoding="utf-8", newline="") as f:
+        f.write("id,city,country,population,score,note\n")
+        for i in range(1, rows + 1):
+            city, country = cities[i % len(cities)]
+            pop = 1_000_000 + (i * 997) % 40_000_000
+            score = round((i % 1000) / 10.0, 1)
+            note = f"row-{i:06d}"
+            f.write(f"{i},{city},{country},{pop},{score},{note}\n")
+
+
 def write_cbz(path: Path, image_path: Path) -> None:
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
         for i in range(1, 4):
@@ -502,10 +531,11 @@ def main() -> None:
     write_odp(out / "sample.odp")
     write_epub(out / "sample.epub")
     write_large_epub(out / "sample-large.epub", pages=pages)
+    write_large_csv(out / "sample-large.csv", rows=50_000)
     write_legacy_doc(out / "sample.doc")
     write_cbz(out / "sample.cbz", out / "sample-icon.png")
     (out / "sample.bin").write_bytes(bytes([0x00, 0x01, 0x02, 0xCA, 0xFE, 0xBA, 0xBE]) + b"omnicat-binary-demo")
-    print(f"python fixtures -> {out} (large epub: {pages} pages)")
+    print(f"python fixtures -> {out} (large epub: {pages} pages, large csv: 50000 rows)")
 
 
 if __name__ == "__main__":

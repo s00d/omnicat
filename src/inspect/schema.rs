@@ -1,4 +1,5 @@
 use std::fs;
+use std::ops::ControlFlow;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
@@ -195,11 +196,11 @@ fn schema_jsonl(path: &Path, display: &str, config: &OmnicatConfig) -> Result<Sc
         let text = line.text_lossy();
         let trimmed = text.trim();
         if trimmed.is_empty() {
-            return Ok(());
+            return Ok(ControlFlow::Continue(()));
         }
         total_rows += 1;
         if sample_rows >= 200 {
-            return Ok(());
+            return Ok(ControlFlow::Continue(()));
         }
         if let Ok(serde_json::Value::Object(map)) =
             serde_json::from_str::<serde_json::Value>(trimmed)
@@ -209,7 +210,7 @@ fn schema_jsonl(path: &Path, display: &str, config: &OmnicatConfig) -> Result<Sc
                 keys.entry(k).or_default().push(json_type_name(&v));
             }
         }
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     })?;
     let fields: Vec<SchemaField> = keys
         .into_iter()

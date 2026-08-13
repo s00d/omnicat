@@ -1,15 +1,9 @@
+//! Static page output for `--paginate` / `--page`.
+
 use std::io::{self, Write};
 
-use anyhow::Result;
-use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{self, DisableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers};
-use crossterm::style::{Attribute, Print, ResetColor, SetAttribute};
-use crossterm::terminal::{
-    self, Clear, ClearType, DisableLineWrap, EnableLineWrap, EnterAlternateScreen,
-    LeaveAlternateScreen,
-};
-use crossterm::{execute, queue};
-use unicode_width::UnicodeWidthChar;
+use anyhow::{bail, Result};
+use crossterm::terminal;
 
 use crate::config::PaginateDisplay;
 use crate::detect::HandlerKind;
@@ -17,23 +11,9 @@ use crate::orchestrator::ResolvedHandler;
 
 type Page = Vec<Vec<u8>>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Nav {
-    Next,
-    Prev,
-    First,
-    Last,
-    Quit,
-}
-
-pub fn pagination_requested(config: &crate::config::OmnicatConfig, cli_paginate: bool) -> bool {
-    let env_on =
-        std::env::var_os("OMNICAT_PAGINATE").is_some_and(|v| v != "0" && v != "false" && v != "no");
-    if !cli_paginate && !config.terminal.paginate.enabled && !env_on {
-        return false;
-    }
-    is_terminal::IsTerminal::is_terminal(&io::stdout())
-        && is_terminal::IsTerminal::is_terminal(&io::stdin())
+/// True when the user asked for static paging via CLI.
+pub fn pagination_requested(cli_paginate: bool, page: Option<usize>) -> bool {
+    cli_paginate || page.is_some()
 }
 
 pub fn skips_pagination(resolved: &ResolvedHandler) -> bool {
@@ -43,39 +23,71 @@ pub fn skips_pagination(resolved: &ResolvedHandler) -> bool {
     )
 }
 
-/// Write `bytes` to stdout, interactively paging when content exceeds one screen.
-pub fn write_paged(bytes: &[u8], settings: &PaginateDisplay) -> Result<()> {
-    if bytes.is_empty() {
-        return Ok(());
-    }
-
-    let (page_size, status_row) = page_layout(settings);
-    let content_lines = visual_lines(bytes);
-    if content_lines.len() <= page_size {
-        io::stdout().write_all(bytes)?;
-        return Ok(());
-    }
-
-    let pages = paginate_lines(&content_lines, page_size);
-    eprintln!(
-        "omnicat: paging (1/{}) — Space/Enter/Down: next, b/Up: prev, g/G: ends, q: quit",
-        pages.len()
-    );
-    interactive_pager(&pages, status_row)
+/// Write one page of rendered output plus a footer with page/total info.
+///
+/// `page` is 1-based. Invalid page numbers return an error.
+pub fn write_page(bytes: &[u8], settings: &PaginateDisplay, page: usize) -> Result<()> {
+    write_page_to(bytes, settings, page, &mut io::stdout().lock())
 }
 
-fn page_layout(settings: &PaginateDisplay) -> (usize, u16) {
-    let (_, term_rows) = terminal::size().unwrap_or((80, 24));
-    let status_row = term_rows.saturating_sub(1).max(1);
-    let content_rows = if settings.page_lines > 0 {
-        settings.page_lines.min(status_row) as usize
+fn write_page_to(
+    bytes: &[u8],
+    settings: &PaginateDisplay,
+    page: usize,
+    out: &mut dyn Write,
+) -> Result<()> {
+    let page_size = page_size(settings);
+    let lines = split_lines(bytes);
+    let pages = paginate_lines(&lines, page_size);
+    let total = pages.len().max(1);
+    let total_lines = lines.len();
+
+    if page == 0 || page > total {
+        bail!("page {page} out of range (valid: 1..={total})");
+    }
+
+    let selected = pages.get(page - 1).cloned().unwrap_or_default();
+    for line in &selected {
+        out.write_all(line)?;
+        if !line.last().is_some_and(|&b| b == b'\n') {
+            out.write_all(b"\n")?;
+        }
+    }
+
+    let start_line = if total_lines == 0 {
+        0
     } else {
-        status_row as usize
+        (page - 1) * page_size + 1
     };
-    (content_rows.max(1), status_row)
+    let end_line = if total_lines == 0 {
+        0
+    } else {
+        ((page - 1) * page_size + selected.len()).min(total_lines)
+    };
+
+    writeln!(
+        out,
+        "--- page {page}/{total} (lines {start_line}–{end_line} of {total_lines}) ---"
+    )?;
+    out.flush()?;
+    Ok(())
+}
+
+fn page_size(settings: &PaginateDisplay) -> usize {
+    if settings.page_lines > 0 {
+        return settings.page_lines as usize;
+    }
+    let rows = terminal::size()
+        .map(|(_, h)| h as usize)
+        .unwrap_or(50)
+        .saturating_sub(1);
+    rows.max(1)
 }
 
 fn split_lines(bytes: &[u8]) -> Vec<Vec<u8>> {
+    if bytes.is_empty() {
+        return Vec::new();
+    }
     let mut lines = Vec::new();
     let mut start = 0usize;
     for (i, &b) in bytes.iter().enumerate() {
@@ -86,198 +98,18 @@ fn split_lines(bytes: &[u8]) -> Vec<Vec<u8>> {
     }
     if start < bytes.len() {
         lines.push(bytes[start..].to_vec());
-    } else if bytes.last() == Some(&b'\n') {
-        lines.push(Vec::new());
     }
     lines
-}
-
-fn terminal_cols() -> usize {
-    terminal::size()
-        .map(|(w, _)| w as usize)
-        .unwrap_or(80)
-        .max(1)
-}
-
-fn line_payload(line: &[u8]) -> Vec<u8> {
-    let end = if line.last().is_some_and(|&b| b == b'\n') {
-        line.len().saturating_sub(1)
-    } else {
-        line.len()
-    };
-    line[..end].to_vec()
-}
-
-fn sanitize_display_text(text: &str) -> String {
-    text.replace('\r', "")
-        .chars()
-        .filter(|c| *c == '\t' || !c.is_control())
-        .collect()
-}
-
-fn wrap_text(text: &str, width: usize) -> Vec<Vec<u8>> {
-    if text.is_empty() {
-        return vec![Vec::new()];
-    }
-
-    let mut rows = Vec::new();
-    let mut current = String::new();
-    let mut col = 0usize;
-
-    for ch in text.chars() {
-        if ch == '\t' {
-            let spaces = 8 - (col % 8);
-            for _ in 0..spaces {
-                if col + 1 > width && !current.is_empty() {
-                    rows.push(current.as_bytes().to_vec());
-                    current.clear();
-                    col = 0;
-                }
-                current.push(' ');
-                col += 1;
-            }
-            continue;
-        }
-
-        let w = UnicodeWidthChar::width(ch).unwrap_or(0);
-        if w == 0 {
-            continue;
-        }
-        if col + w > width && !current.is_empty() {
-            rows.push(current.as_bytes().to_vec());
-            current.clear();
-            col = 0;
-        }
-        current.push(ch);
-        col += w;
-    }
-
-    if !current.is_empty() {
-        rows.push(current.as_bytes().to_vec());
-    }
-    rows
-}
-
-fn visual_lines(bytes: &[u8]) -> Vec<Vec<u8>> {
-    let width = terminal_cols();
-    let mut visual = Vec::new();
-    for line in split_lines(bytes) {
-        let payload = line_payload(&line);
-        if payload.is_empty() {
-            visual.push(Vec::new());
-            continue;
-        }
-        let text = sanitize_display_text(&String::from_utf8_lossy(&payload));
-        visual.extend(wrap_text(&text, width));
-    }
-    visual
 }
 
 fn paginate_lines(lines: &[Vec<u8>], page_size: usize) -> Vec<Page> {
+    if lines.is_empty() {
+        return vec![Vec::new()];
+    }
     lines
-        .chunks(page_size)
+        .chunks(page_size.max(1))
         .map(|chunk| chunk.to_vec())
         .collect()
-}
-
-fn draw_page(out: &mut io::Stdout, page: &Page, status_row: u16) -> Result<()> {
-    queue!(out, Clear(ClearType::All))?;
-    for (i, line) in page.iter().enumerate() {
-        let row = i as u16;
-        if row >= status_row {
-            break;
-        }
-        queue!(out, MoveTo(0, row), Clear(ClearType::UntilNewLine))?;
-        out.write_all(line)?;
-    }
-    out.flush()?;
-    Ok(())
-}
-
-fn interactive_pager(pages: &[Page], status_row: u16) -> Result<()> {
-    let mut stdout = io::stdout();
-
-    terminal::enable_raw_mode()?;
-    execute!(
-        stdout,
-        EnterAlternateScreen,
-        Hide,
-        DisableLineWrap,
-        DisableMouseCapture,
-    )?;
-
-    let result = (|| -> Result<()> {
-        let mut page = 0usize;
-        loop {
-            draw_page(&mut stdout, &pages[page], status_row)?;
-            draw_status(&mut stdout, status_row, page + 1, pages.len())?;
-
-            match read_nav_key()? {
-                Nav::Quit => break,
-                Nav::Next => {
-                    if page + 1 < pages.len() {
-                        page += 1;
-                    } else {
-                        break;
-                    }
-                }
-                Nav::Prev => page = page.saturating_sub(1),
-                Nav::First => page = 0,
-                Nav::Last => page = pages.len().saturating_sub(1),
-            }
-        }
-        Ok(())
-    })();
-
-    execute!(stdout, Show, LeaveAlternateScreen, EnableLineWrap,)?;
-    terminal::disable_raw_mode()?;
-    result
-}
-
-fn draw_status(out: &mut io::Stdout, row: u16, current: usize, total: usize) -> Result<()> {
-    let line = format!(
-        "Page {current}/{total} — Space/Enter/Down/PgDn: next  b/Up/PgUp: prev  g/G: first/last  q/Esc: quit"
-    );
-    queue!(
-        out,
-        MoveTo(0, row),
-        Clear(ClearType::UntilNewLine),
-        SetAttribute(Attribute::Reverse),
-        Print(&line),
-        ResetColor,
-    )?;
-    out.flush()?;
-    Ok(())
-}
-
-fn read_nav_key() -> Result<Nav> {
-    loop {
-        match event::read()? {
-            Event::Key(KeyEvent {
-                code, modifiers, ..
-            }) => {
-                if modifiers.contains(KeyModifiers::CONTROL) && code == KeyCode::Char('c') {
-                    return Ok(Nav::Quit);
-                }
-                return Ok(match code {
-                    KeyCode::Char('q') | KeyCode::Esc => Nav::Quit,
-                    KeyCode::Char(' ') | KeyCode::Enter | KeyCode::Char('j') | KeyCode::Down => {
-                        Nav::Next
-                    }
-                    KeyCode::Char('b') | KeyCode::Char('k') | KeyCode::Up => Nav::Prev,
-                    KeyCode::Char('g') => Nav::First,
-                    KeyCode::Char('G') => Nav::Last,
-                    KeyCode::PageDown => Nav::Next,
-                    KeyCode::PageUp => Nav::Prev,
-                    KeyCode::Home => Nav::First,
-                    KeyCode::End => Nav::Last,
-                    _ => continue,
-                });
-            }
-            Event::Mouse(_) | Event::Resize(..) | Event::FocusGained | Event::FocusLost => continue,
-            _ => continue,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -285,12 +117,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn split_lines_preserves_trailing_newline_line() {
+    fn split_lines_keeps_newline_terminated_rows() {
         let lines = split_lines(b"a\nb\n");
-        assert_eq!(lines.len(), 3);
+        assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], b"a\n");
         assert_eq!(lines[1], b"b\n");
-        assert_eq!(lines[2], b"");
     }
 
     #[test]
@@ -302,24 +133,37 @@ mod tests {
     }
 
     #[test]
-    fn many_lines_trigger_multiple_pages() {
-        let mut buf = String::new();
-        for i in 0..100 {
-            buf.push_str(&format!("line {i}\n"));
-        }
-        let lines = visual_lines(buf.as_bytes());
-        let (page_size, _) = page_layout(&PaginateDisplay::default());
-        assert!(lines.len() > page_size);
-        assert!(paginate_lines(&lines, page_size).len() > 1);
+    fn empty_content_is_one_page() {
+        assert_eq!(paginate_lines(&[], 10).len(), 1);
     }
 
     #[test]
-    fn long_logical_line_wraps_into_many_visual_lines() {
-        let width = terminal_cols();
-        let long = "x".repeat(width * 40);
-        let mut buf = long.into_bytes();
-        buf.push(b'\n');
-        let visual = visual_lines(&buf);
-        assert!(visual.len() >= 40, "got {}", visual.len());
+    fn write_page_rejects_out_of_range() {
+        let settings = PaginateDisplay { page_lines: 2 };
+        let buf = b"a\nb\nc\nd\n";
+        let mut sink = Vec::new();
+        let err = write_page_to(buf, &settings, 9, &mut sink).unwrap_err();
+        assert!(err.to_string().contains("out of range"));
+        let err0 = write_page_to(buf, &settings, 0, &mut sink).unwrap_err();
+        assert!(err0.to_string().contains("out of range"));
+    }
+
+    #[test]
+    fn write_page_emits_content_and_footer() {
+        let settings = PaginateDisplay { page_lines: 2 };
+        let mut sink = Vec::new();
+        write_page_to(b"a\nb\nc\nd\n", &settings, 2, &mut sink).unwrap();
+        let text = String::from_utf8(sink).unwrap();
+        assert!(text.contains("c\n"));
+        assert!(text.contains("d\n"));
+        assert!(!text.contains("a\n"));
+        assert!(text.contains("--- page 2/2 (lines 3–4 of 4) ---"));
+    }
+
+    #[test]
+    fn pagination_requested_from_flags() {
+        assert!(!pagination_requested(false, None));
+        assert!(pagination_requested(true, None));
+        assert!(pagination_requested(false, Some(2)));
     }
 }

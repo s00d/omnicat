@@ -10,8 +10,12 @@ pub mod inspect;
 pub mod io;
 pub mod orchestrator;
 pub mod preview;
+pub mod search;
 pub mod sinks;
 pub mod status;
+
+#[doc(hidden)]
+pub mod bench_support;
 
 mod cat;
 
@@ -96,6 +100,11 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
         config.inspect.allow_unsafe = true;
     }
 
+    let mut preview_ctx = content::preview_context(render_path);
+    preview_ctx.sql_schema_only = options.schema_only;
+    preview_ctx.sql_table = options.table.clone();
+    preview_ctx.progress = options.progress;
+
     let resolved = PreviewOrchestrator::resolve(render_path, &config).or_else(|| {
         if config.behavior.on_unknown_format == "fallback" {
             Some(ResolvedHandler::Builtin(HandlerKind::Fallback))
@@ -106,7 +115,8 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
 
     if let Some(resolved) = resolved {
         if options.preview {
-            match preview::try_open_preview(render_path, &resolved, &config) {
+            match preview::try_open_preview_with_ctx(render_path, &resolved, &config, &preview_ctx)
+            {
                 Ok(true) => {
                     if options.preview_only {
                         return Ok(());
@@ -131,7 +141,7 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
             return Ok(());
         }
 
-        let use_pagination = sinks::paginate::pagination_requested(&config, options.paginate)
+        let use_pagination = sinks::paginate::pagination_requested(options.paginate, options.page)
             && !sinks::paginate::skips_pagination(&resolved);
 
         let render_config = if use_pagination {
@@ -145,10 +155,11 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
 
         if use_pagination {
             let mut buf = Vec::new();
-            if let Err(err) = PreviewOrchestrator::render_terminal_resolved(
+            if let Err(err) = PreviewOrchestrator::render_terminal_resolved_with_ctx(
                 &resolved,
                 render_path,
                 &render_config,
+                &preview_ctx,
                 &mut buf,
             ) {
                 eprintln!("{APP_NAME}: {err:#}");
@@ -157,14 +168,16 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
                 }
                 passthrough_cat(&[path])?;
             } else {
-                sinks::paginate::write_paged(&buf, &config.terminal.paginate)?;
+                let page = options.page.unwrap_or(1);
+                sinks::paginate::write_page(&buf, &config.terminal.paginate, page)?;
             }
         } else {
             let mut stdout = std::io::stdout().lock();
-            if let Err(err) = PreviewOrchestrator::render_terminal_resolved(
+            if let Err(err) = PreviewOrchestrator::render_terminal_resolved_with_ctx(
                 &resolved,
                 render_path,
                 &render_config,
+                &preview_ctx,
                 &mut stdout,
             ) {
                 drop(stdout);

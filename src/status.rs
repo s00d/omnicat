@@ -133,11 +133,7 @@ fn print_terminal_settings(cfg: &OmnicatConfig) {
     let _ = writeln!(buf, "  data.pretty: {}", t.data.pretty);
     let _ = writeln!(buf, "  image.protocol: {}", t.image.protocol);
     let _ = writeln!(buf, "  fallback.hex_cols: {}", t.fallback.hex_cols);
-    let _ = writeln!(
-        buf,
-        "  paginate.enabled: {}  page_lines: {}",
-        t.paginate.enabled, t.paginate.page_lines
-    );
+    let _ = writeln!(buf, "  paginate.page_lines: {}", t.paginate.page_lines);
     let _ = writeln!(buf, "  document.max_chars: {}", t.document.max_chars);
     print!("{buf}");
 }

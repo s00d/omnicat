@@ -14,6 +14,7 @@ use crate::content::{PreviewContent, PreviewContext, TableContent};
 use crate::detect::HandlerKind;
 use crate::drivers::theme::resolve_theme;
 use crate::drivers::{capture_render, PreviewDriver};
+use crate::sinks::progress::ProgressReporter;
 
 pub struct DataDriver;
 
@@ -74,7 +75,7 @@ impl PreviewDriver for DataDriver {
         &self,
         path: &Path,
         config: &OmnicatConfig,
-        _ctx: &PreviewContext,
+        ctx: &PreviewContext,
     ) -> Result<PreviewContent> {
         let ext = path
             .extension()
@@ -85,15 +86,13 @@ impl PreviewDriver for DataDriver {
             "parquet" => build_parquet_table(path, config),
             "feather" => build_feather_table(path, config),
             "msgpack" => build_msgpack_text(path),
-            "csv" => {
-                let raw = fs::read_to_string(path)?;
-                Ok(PreviewContent::Table(parse_delimited(&raw, b',', config)?))
-            }
-            "tsv" => {
-                let raw = fs::read_to_string(path)?;
-                Ok(PreviewContent::Table(parse_delimited(&raw, b'\t', config)?))
-            }
-            "jsonl" | "ndjson" => build_jsonl_table(path, config),
+            "csv" => Ok(PreviewContent::Table(parse_delimited_path(
+                path, b',', config, ctx,
+            )?)),
+            "tsv" => Ok(PreviewContent::Table(parse_delimited_path(
+                path, b'\t', config, ctx,
+            )?)),
+            "jsonl" | "ndjson" => build_jsonl_table(path, config, ctx),
             _ => {
                 let text = capture_render(|buf| self.render(path, config, buf))?;
                 Ok(PreviewContent::Text(text))
@@ -141,14 +140,28 @@ fn render_tsv(raw: &str, config: &OmnicatConfig) -> Result<String> {
     render_delimited_terminal(raw, b'\t', config)
 }
 
-fn parse_delimited(raw: &str, delimiter: u8, config: &OmnicatConfig) -> Result<TableContent> {
-    let records = read_delimited_records(raw, delimiter)?;
+fn parse_delimited_path(
+    path: &Path,
+    delimiter: u8,
+    config: &OmnicatConfig,
+    ctx: &PreviewContext,
+) -> Result<TableContent> {
     let max_rows = config
         .gui
         .spreadsheet
         .max_rows
         .min(config.terminal.data.max_rows);
-    let (headers, rows) = table_from_records(records, max_rows, config.gui.spreadsheet.header_row);
+    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let mut progress = ProgressReporter::new("read", ctx.progress);
+    let (headers, rows) = read_delimited_limited(
+        file,
+        delimiter,
+        max_rows,
+        config.gui.spreadsheet.header_row,
+        Some(&mut progress),
+        ctx.size,
+    )?;
+    progress.finish();
     Ok(TableContent {
         title: None,
         headers,
@@ -157,41 +170,81 @@ fn parse_delimited(raw: &str, delimiter: u8, config: &OmnicatConfig) -> Result<T
 }
 
 fn render_delimited_terminal(raw: &str, delimiter: u8, config: &OmnicatConfig) -> Result<String> {
-    let records = read_delimited_records(raw, delimiter)?;
-    let total = records
-        .len()
-        .saturating_sub(if records.is_empty() { 0 } else { 1 });
+    let max = config.terminal.data.max_rows;
+    let (headers, rows) = read_delimited_limited(raw.as_bytes(), delimiter, max, true, None, 0)?;
+    let total = rows.len();
     let mut table = Table::new();
     crate::sinks::styled_table::configure_table(&mut table, config.terminal.data.table_border);
-    if let Some(header) = records.first() {
-        crate::sinks::styled_table::set_styled_header(&mut table, header.clone(), config);
-        let max = config.terminal.data.max_rows;
-        for row in records.iter().skip(1).take(max) {
-            crate::sinks::styled_table::add_styled_row(&mut table, row.clone(), config);
-        }
-    } else {
-        for row in &records {
-            crate::sinks::styled_table::add_styled_row(&mut table, row.clone(), config);
-        }
+    if !headers.is_empty() {
+        crate::sinks::styled_table::set_styled_header(&mut table, headers.clone(), config);
     }
-    let cols = records.first().map(|r| r.len()).unwrap_or(0);
+    for row in &rows {
+        crate::sinks::styled_table::add_styled_row(&mut table, row.clone(), config);
+    }
+    let cols = headers
+        .len()
+        .max(rows.first().map(|r| r.len()).unwrap_or(0));
     Ok(format!("{table}\n\n{total} rows × {cols} columns"))
 }
 
-fn build_jsonl_table(path: &Path, config: &OmnicatConfig) -> Result<PreviewContent> {
-    use crate::content::{cell_value, plan_columns};
+fn read_delimited_limited<R: std::io::Read>(
+    reader: R,
+    delimiter: u8,
+    max_rows: usize,
+    header_row: bool,
+    mut progress: Option<&mut ProgressReporter>,
+    _file_size: u64,
+) -> Result<(Vec<String>, Vec<Vec<String>>)> {
+    let mut rdr = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .delimiter(delimiter)
+        .flexible(true)
+        .from_reader(reader);
+    let mut records = Vec::new();
+    for (i, result) in rdr.records().enumerate() {
+        let limit = if header_row {
+            max_rows.saturating_add(1)
+        } else {
+            max_rows
+        };
+        if i >= limit {
+            break;
+        }
+        records.push(
+            result
+                .context("csv parse error")?
+                .iter()
+                .map(str::to_string)
+                .collect(),
+        );
+        if let Some(p) = progress.as_mut() {
+            let body_rows = if header_row { i } else { i + 1 };
+            p.tick_count(body_rows as u64, "rows");
+        }
+    }
+    Ok(table_from_records(records, max_rows, header_row))
+}
 
-    let raw = fs::read_to_string(path)?;
+fn build_jsonl_table(
+    path: &Path,
+    config: &OmnicatConfig,
+    ctx: &PreviewContext,
+) -> Result<PreviewContent> {
+    use crate::content::{cell_value, plan_columns};
+    use crate::io::{FileHandle, OpenOptions};
+    use std::ops::ControlFlow;
+
     let mut keys: Vec<String> = Vec::new();
     let mut key_set = std::collections::BTreeSet::new();
     let mut objects = Vec::new();
     let max = config.terminal.data.max_rows;
-    for line in raw.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
+    let mut progress = ProgressReporter::new("read", ctx.progress);
+    FileHandle::open(path, OpenOptions::stream())?.for_each_line(|line| {
+        let text = line.as_str().unwrap_or("").trim();
+        if text.is_empty() {
+            return Ok(ControlFlow::Continue(()));
         }
-        if let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(line)
+        if let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(text)
         {
             for k in map.keys() {
                 if key_set.insert(k.clone()) {
@@ -199,11 +252,17 @@ fn build_jsonl_table(path: &Path, config: &OmnicatConfig) -> Result<PreviewConte
                 }
             }
             objects.push(map);
+            progress.tick_count(objects.len() as u64, "rows");
+            if ctx.size > 0 {
+                progress.tick_bytes(line.line_no.saturating_mul(64), Some(ctx.size));
+            }
             if objects.len() >= max {
-                break;
+                return Ok(ControlFlow::Break(()));
             }
         }
-    }
+        Ok(ControlFlow::Continue(()))
+    })?;
+    progress.finish();
     let cols = plan_columns(&keys);
     let rows: Vec<Vec<String>> = objects
         .into_iter()
@@ -219,25 +278,6 @@ fn build_jsonl_table(path: &Path, config: &OmnicatConfig) -> Result<PreviewConte
         headers: cols.headers,
         rows,
     }))
-}
-
-fn read_delimited_records(raw: &str, delimiter: u8) -> Result<Vec<Vec<String>>> {
-    let mut rdr = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .delimiter(delimiter)
-        .flexible(true)
-        .from_reader(raw.as_bytes());
-    let mut records = Vec::new();
-    for result in rdr.records() {
-        records.push(
-            result
-                .context("csv parse error")?
-                .iter()
-                .map(str::to_string)
-                .collect(),
-        );
-    }
-    Ok(records)
 }
 
 fn table_from_records(

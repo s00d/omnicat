@@ -1,7 +1,7 @@
 //! Incremental follow reader (tail -f) with rotation/truncation detection.
 
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Seek, SeekFrom};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
@@ -55,8 +55,8 @@ pub struct FollowIter {
     path: PathBuf,
     /// Plain (uncompressed) follow state.
     plain: Option<PlainFollow>,
-    /// Compressed follow: re-open + skip already-seen lines.
-    compressed_seen: Option<u64>,
+    /// Compressed follow: keep decoder open (no re-decompress from 0 each poll).
+    compressed: Option<CompressedFollow>,
     line_no: u64,
     buf: String,
     id: FileId,
@@ -66,26 +66,34 @@ struct PlainFollow {
     reader: BufReader<File>,
 }
 
+struct CompressedFollow {
+    reader: BufReader<Box<dyn Read + Send>>,
+    /// Compressed file length when decoder was opened (rotation/truncation detect).
+    opened_len: u64,
+}
+
 impl FollowIter {
     pub fn open(path: &Path) -> io::Result<Self> {
         let meta = std::fs::metadata(path)?;
         let id = FileId::from_meta(&meta);
         let compressed = detect_compression(path) != Compression::None;
         if compressed {
-            // Start at EOF of the *decompressed* stream by counting existing lines.
+            let reader = open_reader(path, true).map_err(io::Error::other)?;
+            let mut br = BufReader::new(reader);
+            // Start at EOF of the *decompressed* stream.
+            let mut line = String::new();
             let mut seen = 0u64;
-            if let Ok(reader) = open_reader(path, true) {
-                let mut br = BufReader::new(reader);
-                let mut line = String::new();
-                while br.read_line(&mut line).unwrap_or(0) > 0 {
-                    seen += 1;
-                    line.clear();
-                }
+            while br.read_line(&mut line).unwrap_or(0) > 0 {
+                seen += 1;
+                line.clear();
             }
             Ok(Self {
                 path: path.to_path_buf(),
                 plain: None,
-                compressed_seen: Some(seen),
+                compressed: Some(CompressedFollow {
+                    reader: br,
+                    opened_len: id.len,
+                }),
                 line_no: seen,
                 buf: String::new(),
                 id,
@@ -98,7 +106,7 @@ impl FollowIter {
                 plain: Some(PlainFollow {
                     reader: BufReader::new(file),
                 }),
-                compressed_seen: None,
+                compressed: None,
                 line_no: 0,
                 buf: String::new(),
                 id,
@@ -130,54 +138,72 @@ impl FollowIter {
         Ok(())
     }
 
-    fn next_compressed_line(&mut self) -> io::Result<Option<Vec<u8>>> {
-        let seen = self.compressed_seen.unwrap_or(0);
+    fn maybe_reopen_compressed(&mut self) -> io::Result<()> {
         let Ok(path_id) = self.refresh_id() else {
+            return Ok(());
+        };
+        let Some(comp) = self.compressed.as_mut() else {
+            return Ok(());
+        };
+        let rotated = !self.id.identity_eq(&path_id);
+        let truncated = path_id.len < comp.opened_len;
+        if rotated || truncated {
+            let reader = open_reader(&self.path, true).map_err(io::Error::other)?;
+            comp.reader = BufReader::new(reader);
+            comp.opened_len = path_id.len;
+            self.id = path_id;
+            self.line_no = 0;
+        } else if path_id.len > comp.opened_len {
+            // File grew: for concatenated gzip members, reopen and skip already-seen lines.
+            // Keeping the old decoder often stalls at member EOF even when more bytes exist.
+            let skip = self.line_no;
+            let reader = open_reader(&self.path, true).map_err(io::Error::other)?;
+            let mut br = BufReader::new(reader);
+            let mut line = String::new();
+            let mut idx = 0u64;
+            while idx < skip && br.read_line(&mut line)? > 0 {
+                idx += 1;
+                line.clear();
+            }
+            comp.reader = br;
+            comp.opened_len = path_id.len;
+            self.id = path_id;
+        }
+        Ok(())
+    }
+
+    fn next_compressed_line(&mut self) -> io::Result<Option<Vec<u8>>> {
+        self.maybe_reopen_compressed()?;
+        let Some(comp) = self.compressed.as_mut() else {
             return Ok(None);
         };
-        if !self.id.identity_eq(&path_id) {
-            self.id = path_id;
-            self.compressed_seen = Some(0);
-            self.line_no = 0;
-        }
-        let reader = open_reader(&self.path, true).map_err(io::Error::other)?;
-        let mut br = BufReader::new(reader);
-        let mut line = String::new();
-        let mut idx = 0u64;
-        let skip = self.compressed_seen.unwrap_or(0);
-        while br.read_line(&mut line)? > 0 {
-            if idx >= skip {
-                let mut bytes = line.into_bytes();
+        self.buf.clear();
+        match comp.reader.read_line(&mut self.buf)? {
+            0 => Ok(None),
+            _ => {
+                let mut bytes = std::mem::take(&mut self.buf).into_bytes();
                 if bytes.last() == Some(&b'\n') {
                     bytes.pop();
                 }
                 if bytes.last() == Some(&b'\r') {
                     bytes.pop();
                 }
-                self.compressed_seen = Some(idx + 1);
-                return Ok(Some(bytes));
+                Ok(Some(bytes))
             }
-            idx += 1;
-            line.clear();
         }
-        let _ = seen;
-        Ok(None)
     }
 }
 
 impl Iterator for FollowIter {
-    type Item = io::Result<LineRef<'static>>;
+    type Item = io::Result<(u64, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if self.compressed_seen.is_some() {
+            if self.compressed.is_some() {
                 match self.next_compressed_line() {
                     Ok(Some(bytes)) => {
                         self.line_no += 1;
-                        return Some(Ok(LineRef {
-                            bytes: Box::leak(bytes.into_boxed_slice()),
-                            line_no: self.line_no,
-                        }));
+                        return Some(Ok((self.line_no, bytes)));
                     }
                     Ok(None) => {
                         thread::sleep(Duration::from_millis(POLL_MS));
@@ -198,17 +224,14 @@ impl Iterator for FollowIter {
                 }
                 Ok(_) => {
                     self.line_no += 1;
-                    let mut bytes = self.buf.as_bytes().to_vec();
+                    let mut bytes = std::mem::take(&mut self.buf).into_bytes();
                     if bytes.last() == Some(&b'\n') {
                         bytes.pop();
                     }
                     if bytes.last() == Some(&b'\r') {
                         bytes.pop();
                     }
-                    return Some(Ok(LineRef {
-                        bytes: Box::leak(bytes.into_boxed_slice()),
-                        line_no: self.line_no,
-                    }));
+                    return Some(Ok((self.line_no, bytes)));
                 }
                 Err(e) => return Some(Err(e)),
             }
@@ -222,7 +245,11 @@ where
     F: FnMut(LineRef<'_>) -> io::Result<()>,
 {
     for item in FollowIter::open(path)? {
-        on_line(item?)?;
+        let (line_no, bytes) = item?;
+        on_line(LineRef {
+            line_no,
+            bytes: &bytes,
+        })?;
     }
     Ok(())
 }

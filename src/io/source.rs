@@ -45,30 +45,26 @@ pub fn detect_compression(path: &Path) -> Compression {
     }
 }
 
+const FILE_BUF: usize = 256 * 1024;
+
 /// Boxed reader, optionally decompressed.
+///
+/// Compressed paths use `BufReader(File) → Decoder` so the decoder is not
+/// starved by tiny syscalls. Uncompressed paths are a single `BufReader`.
 pub fn open_reader(path: &Path, decompress: bool) -> Result<Box<dyn Read + Send>> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let buffered = BufReader::with_capacity(FILE_BUF, file);
     if !decompress {
-        return Ok(Box::new(BufReader::with_capacity(256 * 1024, file)));
+        return Ok(Box::new(buffered));
     }
     match detect_compression(path) {
-        Compression::None => Ok(Box::new(BufReader::with_capacity(256 * 1024, file))),
-        Compression::Gzip => Ok(Box::new(BufReader::with_capacity(
-            256 * 1024,
-            GzDecoder::new(file),
-        ))),
-        Compression::Bzip2 => Ok(Box::new(BufReader::with_capacity(
-            256 * 1024,
-            BzDecoder::new(file),
-        ))),
-        Compression::Xz => Ok(Box::new(BufReader::with_capacity(
-            256 * 1024,
-            XzDecoder::new(file),
-        ))),
-        Compression::Zstd => Ok(Box::new(BufReader::with_capacity(
-            256 * 1024,
-            zstd::Decoder::new(file).context("zstd decoder")?,
-        ))),
+        Compression::None => Ok(Box::new(buffered)),
+        Compression::Gzip => Ok(Box::new(GzDecoder::new(buffered))),
+        Compression::Bzip2 => Ok(Box::new(BzDecoder::new(buffered))),
+        Compression::Xz => Ok(Box::new(XzDecoder::new(buffered))),
+        Compression::Zstd => Ok(Box::new(
+            zstd::Decoder::new(buffered).context("zstd decoder")?,
+        )),
     }
 }
 

@@ -9,12 +9,15 @@ use anyhow::{bail, Context, Result};
 use crate::config::OmnicatConfig;
 use crate::inspect::hash::file_blake3;
 use crate::inspect::report::{human_size, DuplicateGroup, DuplicatesReport};
+use crate::sinks::progress::ProgressReporter;
 
 pub fn build_duplicates(
     path: &Path,
     display: &str,
     config: &OmnicatConfig,
+    progress: bool,
 ) -> Result<DuplicatesReport> {
+    let mut progress = ProgressReporter::new("duplicates", progress);
     let meta = fs::metadata(path).with_context(|| format!("stat {}", path.display()))?;
     if !meta.is_dir() {
         bail!("--duplicates expects a directory, got {}", path.display());
@@ -39,18 +42,27 @@ pub fn build_duplicates(
     )?;
 
     // Only sizes with 2+ files can be duplicates.
+    let candidates: Vec<(u64, PathBuf)> = by_size
+        .into_iter()
+        .filter(|(_, paths)| paths.len() >= 2)
+        .flat_map(|(size, paths)| {
+            if size == 0 {
+                Vec::new()
+            } else {
+                paths.into_iter().map(|p| (size, p)).collect()
+            }
+        })
+        .collect();
+    let total = candidates.len() as u64;
+
     let mut hash_groups: BTreeMap<String, Vec<(PathBuf, u64)>> = BTreeMap::new();
-    for (size, paths) in by_size {
-        if paths.len() < 2 || size == 0 {
-            continue;
-        }
-        for p in paths {
-            let digest = match file_blake3(&p, None) {
-                Ok(h) => h,
-                Err(_) => continue,
-            };
-            hash_groups.entry(digest).or_default().push((p, size));
-        }
+    for (i, (size, p)) in candidates.into_iter().enumerate() {
+        progress.tick_count_total((i + 1) as u64, total, "files");
+        let digest = match file_blake3(&p, None, &mut progress) {
+            Ok(h) => h,
+            Err(_) => continue,
+        };
+        hash_groups.entry(digest).or_default().push((p, size));
     }
 
     let mut groups = Vec::new();
@@ -80,6 +92,8 @@ pub fn build_duplicates(
             "Skipped {skipped_large} file(s) larger than max_bytes. Use --all to include them."
         ));
     }
+
+    progress.finish();
 
     Ok(DuplicatesReport {
         path: display.to_string(),
