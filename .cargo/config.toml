@@ -1,0 +1,3 @@
+# Do NOT add -Wl,-no_compact_unwind on macOS: it breaks C++ exception unwinding
+# in native deps (rusqlite/bundled, rodio, liblzma) and can cause SIGABRT.
+# Large __eh_frame linker notes in debug builds are allowed via [lints.rust] in Cargo.toml.

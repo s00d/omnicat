@@ -5,10 +5,10 @@ use std::time::Duration;
 use anyhow::Result;
 
 use crate::config::OmnicatConfig;
-use crate::content::PreviewContent;
+use crate::content::{preview_context, PreviewContent, PreviewContext};
 use crate::detect::HandlerKind;
 use crate::drivers::code::CodeDriver;
-use crate::drivers::ebook::EbookDriver;
+use crate::drivers::data::DataDriver;
 use crate::drivers::external;
 use crate::drivers::image::ImageDriver;
 use crate::drivers::markdown::MarkdownDriver;
@@ -43,6 +43,15 @@ impl PreviewOrchestrator {
         path: &Path,
         config: &OmnicatConfig,
     ) -> Result<PreviewContent> {
+        Self::build_resolved_with_ctx(resolved, path, config, &preview_context(path))
+    }
+
+    pub fn build_resolved_with_ctx(
+        resolved: &ResolvedHandler,
+        path: &Path,
+        config: &OmnicatConfig,
+        ctx: &PreviewContext,
+    ) -> Result<PreviewContent> {
         let timeout = external_timeout(config);
         match resolved {
             ResolvedHandler::Builtin(kind) => {
@@ -51,7 +60,7 @@ impl PreviewOrchestrator {
                         return Ok(content);
                     }
                 }
-                DriverRegistry::build(*kind, path, config)
+                DriverRegistry::build_with_ctx(*kind, path, config, ctx)
             }
             ResolvedHandler::Custom(name) => {
                 let handler = handler_config_for_custom(name, config)
@@ -74,6 +83,16 @@ impl PreviewOrchestrator {
         config: &OmnicatConfig,
         out: &mut dyn Write,
     ) -> Result<()> {
+        Self::render_terminal_resolved_with_ctx(resolved, path, config, &preview_context(path), out)
+    }
+
+    pub fn render_terminal_resolved_with_ctx(
+        resolved: &ResolvedHandler,
+        path: &Path,
+        config: &OmnicatConfig,
+        ctx: &PreviewContext,
+        out: &mut dyn Write,
+    ) -> Result<()> {
         let timeout = external_timeout(config);
         match resolved {
             ResolvedHandler::Builtin(kind) => {
@@ -91,13 +110,13 @@ impl PreviewOrchestrator {
                 if *kind == HandlerKind::Code {
                     return CodeDriver.render(path, config, out);
                 }
-                if *kind == HandlerKind::Ebook {
-                    return EbookDriver.render_terminal(path, config, out);
-                }
                 if *kind == HandlerKind::Media {
                     return MediaDriver.render_terminal(path, config, out);
                 }
-                let content = DriverRegistry::build(*kind, path, config)?;
+                if *kind == HandlerKind::Data {
+                    return DataDriver::render_terminal(path, config, ctx, out);
+                }
+                let content = DriverRegistry::build_with_ctx(*kind, path, config, ctx)?;
                 terminal::write_content(&content, config, out)
             }
             ResolvedHandler::Custom(name) => {

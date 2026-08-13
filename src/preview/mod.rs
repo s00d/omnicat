@@ -28,10 +28,24 @@ pub fn try_open_preview(
     resolved: &ResolvedHandler,
     config: &OmnicatConfig,
 ) -> Result<bool> {
+    try_open_preview_with_ctx(
+        path,
+        resolved,
+        config,
+        &crate::content::preview_context(path),
+    )
+}
+
+pub fn try_open_preview_with_ctx(
+    path: &Path,
+    resolved: &ResolvedHandler,
+    config: &OmnicatConfig,
+    ctx: &crate::content::PreviewContext,
+) -> Result<bool> {
     if !availability::gui_available() {
         return Ok(false);
     }
-    let content = PreviewOrchestrator::build_resolved(resolved, path, config)?;
+    let content = PreviewOrchestrator::build_resolved_with_ctx(resolved, path, config, ctx)?;
     open_preview(path, resolved, config, &content)?;
     Ok(true)
 }

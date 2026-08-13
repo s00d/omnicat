@@ -1,14 +1,14 @@
 # Demo fixtures for omnicat
 
-Sample files for manual testing of terminal preview and `--preview` GUI.
+Sample files for manual testing of terminal preview, `--preview` GUI, and inspect (`--find`, `-q`, …).
 
 ## Demo GIF
 
 ![omnicat terminal demo](omnicat-demo.gif)
 
-Shows markdown, code, CSV table, directory tree, hex fallback, and `--status`.
+Shows markdown, code, CSV, directory tree, and `--status`. Commands are recorded hidden so the GIF focuses on output.
 
-Tape uses `echo` for section labels (bare `#` lines are shell comments in zsh). Terminal code theme defaults to `base16-ocean.dark` for readable colors on dark backgrounds.
+Tape uses `echo` for section labels (bare `#` lines are shell comments in zsh). Terminal code theme defaults to `auto`, which detects the terminal background and picks a readable theme (dark or light).
 
 Re-record (requires [VHS](https://github.com/charmbracelet/vhs)):
 
@@ -47,6 +47,12 @@ $BIN demo/files/sample.md
 $BIN demo/files/sample.rs
 $BIN --preview demo/files/sample.md
 
+# Search / query
+$BIN demo/db/sample.sql -q "SELECT * FROM users WHERE status = 'ok'"
+$BIN demo/db/sample.sql -f "status = 'ok' AND id > 1"
+$BIN demo/log/json.log -f 'level:error'
+$BIN demo/log/logfmt.log -f "job_id > 42"
+
 # All handlers (prints detected kind)
 for f in demo/files/* demo/dir-tree; do
   echo "=== $f ==="
@@ -60,23 +66,62 @@ done
 |---------|------|-------|
 | markdown | `files/sample.md` | GFM source |
 | code | `files/sample.rs`, `sample.py` | syntax highlight |
-| data | `files/sample.json`, `.yaml`, `.toml`, `.ini`, `.csv`, `.tsv` | |
+| data | `files/sample.json`, `.yaml`, `.toml`, `.ini`, `.csv`, `.tsv`, `sample-large.csv` | large csv via generate |
 | image | `files/sample.png`, `sample-icon.png`, `sample-wide.png`, `sample.gif` | generated |
 | pdf | `files/sample.pdf` | generated |
-| archive | `files/sample.zip`, `sample.tar`, `sample.tar.gz` | generated |
+| archive | `files/sample.zip`, `sample.tar`, `sample.tar.gz`, `sample.cbz` | tree widget |
 | spreadsheet | `files/sample.xlsx`, `sample.ods` | generated |
-| document | `files/sample.docx`, `sample.odt`, `sample.rtf` | |
 | presentation | `files/sample.pptx`, `sample.odp` | generated |
-| legacy_office | `files/sample.doc` | OLE stub → often `Unsupported` |
+| document | `files/sample.docx`, `sample.odt`, `sample.rtf`, `sample.doc` | anydoc → Markdown; stub `.doc` may be Unsupported |
 | directory | `dir-tree/` | tree widget |
-| ebook | `files/sample.epub`, `sample.fb2`, `sample.mobi`, `sample.azw3`, `sample.cbz`, `sample-large.mobi` | large mobi: 100 pages (`LARGE_PAGES=100`); needs calibre |
+| ebook | `files/sample.epub`, `sample.fb2`, `sample.mobi`, `sample.azw3`, `sample-large.mobi` | epub/mobi/fb2 → Markdown; large mobi needs calibre to generate |
 | media | `files/sample.wav` (+ `.mp3`, `.flac`, `.ogg` via ffmpeg) | playback + progress in TTY |
 | font | `files/sample.ttf` | copied system font (after generate) |
-| database | `files/sample.sqlite` | generated |
-| email | `files/sample.eml` | |
-| notebook | `files/sample.ipynb` | slides in GUI |
+| database | `files/sample.sqlite` | generated; use `-q` / `-f` |
+| email | `files/sample.eml` | Markdown preview |
+| notebook | `files/sample.ipynb` | Markdown cells |
 | plist | `files/sample.plist` | |
 | fallback (text) | `files/sample.txt` | UTF-8 → source editor |
 | fallback (hex) | `files/sample.bin` | binary dump |
 
-Legacy `.doc` / `.xls` / `.ppt` need real Microsoft Office binaries for useful output; the included `.doc` is a minimal OLE container for detection only.
+## DB / log fixtures
+
+No `log` / `db` subcommands — preview the file and use inspect flags.
+
+### `demo/db/`
+
+| Kind | Path |
+|------|------|
+| MySQL dump | `db/sample.sql`, `db/sample.sql.gz`, `db/sample.sql.zst` |
+| Redis RDB | `db/sample.rdb` |
+| Redis AOF | `db/sample.aof`, `db/redis-aof-dir/` |
+| MySQL datadir | `db/mysql-datadir/` |
+
+```bash
+omnicat demo/db/sample.sql
+omnicat demo/db/sample.sql --schema
+omnicat demo/db/sample.sql --table users
+omnicat demo/db/sample.sql -q 'SELECT * FROM users LIMIT 3'
+omnicat demo/db/sample.sql -f "status = 'ok'"
+omnicat demo/files/sample.sqlite -q 'SELECT * FROM users LIMIT 3'
+```
+
+### `demo/log/`
+
+| File | Format |
+|------|--------|
+| `log/json.log` | JSON lines |
+| `log/logfmt.log` | logfmt `key=value` |
+| `log/tracing.log` | timestamp + logfmt |
+| `log/text.log` | plain text (substring only) |
+| `log/nginx.log` | access log (substring) |
+
+```bash
+omnicat demo/log/json.log -f 'level:error'
+omnicat demo/log/logfmt.log -f "service = 'worker' AND level = 'error'"
+omnicat demo/log/text.log -f 'disk full'
+```
+
+See the main [README — Search & query](../README.md#search--query) for predicate syntax and dump `-q` limits.
+
+Legacy `.doc` uses anydoc (real Word binaries). The bundled `sample.doc` is a minimal OLE stub for detection only — expect Unsupported.

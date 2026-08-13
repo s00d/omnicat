@@ -13,7 +13,23 @@ pub struct OmnicatConfig {
     #[serde(default)]
     pub behavior: BehaviorSettings,
     #[serde(default)]
+    pub inspect: InspectSettings,
+    #[serde(default)]
     pub handlers: HashMap<String, HandlerConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InspectSettings {
+    #[serde(default = "default_inspect_max_bytes")]
+    pub max_bytes: usize,
+    #[serde(default = "default_inspect_max_matches")]
+    pub max_matches: usize,
+    #[serde(default = "default_inspect_max_rows")]
+    pub max_rows: usize,
+    #[serde(default)]
+    pub allow_unsafe: bool,
+    #[serde(default)]
+    pub no_limit: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -41,8 +57,6 @@ pub struct TerminalSettings {
     #[serde(default)]
     pub media: MediaDisplay,
     #[serde(default)]
-    pub pdf: PdfDisplay,
-    #[serde(default)]
     pub archive: ArchiveDisplay,
     #[serde(default)]
     pub directory: DirectoryDisplay,
@@ -66,9 +80,7 @@ pub struct TerminalDocumentDisplay {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PaginateDisplay {
-    #[serde(default)]
-    pub enabled: bool,
-    /// Lines per page (0 = fit to terminal height).
+    /// Lines per page (0 = terminal height − 1, or 50 if unknown).
     #[serde(default)]
     pub page_lines: u16,
 }
@@ -83,8 +95,6 @@ pub struct GuiSettings {
     pub preview: GuiPreview,
     #[serde(default)]
     pub spreadsheet: GuiSpreadsheet,
-    #[serde(default)]
-    pub document: GuiDocument,
     #[serde(default)]
     pub image: GuiImage,
     #[serde(default)]
@@ -151,14 +161,6 @@ pub struct ImageDisplay {
 pub struct MediaDisplay {
     #[serde(default = "default_true")]
     pub playback: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct PdfDisplay {
-    #[serde(default = "default_true")]
-    pub page_separator: bool,
-    #[serde(default)]
-    pub max_pages: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -248,14 +250,6 @@ pub struct GuiSpreadsheet {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiDocument {
-    #[serde(default = "default_max_paragraphs")]
-    pub max_paragraphs: usize,
-    #[serde(default = "default_true")]
-    pub show_page_breaks: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GuiImage {
     #[serde(default = "default_image_fit")]
     pub fit: String,
@@ -305,7 +299,7 @@ fn default_true() -> bool {
     true
 }
 fn default_code_theme() -> String {
-    "base16-ocean.dark".into()
+    "auto".into()
 }
 fn default_code_style() -> String {
     "numbers".into()
@@ -364,9 +358,6 @@ fn default_gui_max_rows() -> usize {
 fn default_gui_max_cols() -> usize {
     50
 }
-fn default_max_paragraphs() -> usize {
-    5000
-}
 
 fn default_terminal_document_max_chars() -> usize {
     5000
@@ -388,6 +379,15 @@ fn default_dir_depth() -> usize {
 }
 fn default_gui_dir_depth() -> usize {
     5
+}
+fn default_inspect_max_bytes() -> usize {
+    10_485_760 // 10 MB
+}
+fn default_inspect_max_matches() -> usize {
+    200
+}
+fn default_inspect_max_rows() -> usize {
+    1000
 }
 
 impl Default for MarkdownDisplay {
@@ -417,12 +417,6 @@ impl Default for ImageDisplay {
 impl Default for MediaDisplay {
     fn default() -> Self {
         OmnicatConfig::default().terminal.media
-    }
-}
-
-impl Default for PdfDisplay {
-    fn default() -> Self {
-        OmnicatConfig::default().terminal.pdf
     }
 }
 
@@ -480,12 +474,6 @@ impl Default for GuiSpreadsheet {
     }
 }
 
-impl Default for GuiDocument {
-    fn default() -> Self {
-        OmnicatConfig::default().gui.document
-    }
-}
-
 impl Default for GuiImage {
     fn default() -> Self {
         OmnicatConfig::default().gui.image
@@ -535,8 +523,17 @@ impl Default for BehaviorSettings {
     }
 }
 
-// Backward compat alias used by render modules
-pub type DisplayConfig = OmnicatConfig;
+impl Default for InspectSettings {
+    fn default() -> Self {
+        Self {
+            max_bytes: default_inspect_max_bytes(),
+            max_matches: default_inspect_max_matches(),
+            max_rows: default_inspect_max_rows(),
+            allow_unsafe: false,
+            no_limit: false,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

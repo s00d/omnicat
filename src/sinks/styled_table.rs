@@ -83,6 +83,7 @@ pub fn write_styled_table(
         add_styled_row(&mut table, row.clone(), config);
     }
     writeln!(out, "{table}")?;
+    out.flush()?;
     Ok(())
 }
 

@@ -1,172 +1,616 @@
+//! CLI parsing via clap. No subcommands — file preview + inspect flags only.
+//! Unknown flags and multi-file invocations fall through to plain `cat`.
+
+use std::ffi::OsString;
+use std::path::PathBuf;
+
+use clap::{Args, CommandFactory, Parser};
+
+use crate::inspect::InspectOptions;
+
 #[derive(Debug, Clone, Default)]
 pub struct FileOptions {
     pub preview: bool,
     pub preview_only: bool,
     pub paginate: bool,
+    /// 1-based page when using static pagination (`--page`).
+    pub page: Option<usize>,
+    pub allow_unsafe: bool,
+    /// SQL dump: show CREATE structure only (no INSERT rows).
+    pub schema_only: bool,
+    /// SQL dump: preview a single table by name.
+    pub table: Option<String>,
+    /// Throttled stderr progress while streaming tabular preview.
+    pub progress: bool,
+    /// Disable row/byte caps (`--all`).
+    pub all: bool,
 }
 
 #[derive(Debug, Clone)]
 pub enum Command {
-    Version,
-    Help,
-    Init { shell: String },
+    Init {
+        shell: String,
+    },
     Status,
-    Native { args: Vec<String> },
-    File { path: String, options: FileOptions },
+    Native {
+        args: Vec<String>,
+    },
+    File {
+        path: String,
+        options: FileOptions,
+    },
+    Inspect {
+        path: Option<String>,
+        options: InspectOptions,
+    },
 }
 
+/// Top-level parser. Prefer [`Cli::parse`] / [`Cli::try_parse_from`].
+#[derive(Debug, Parser)]
+#[command(
+    name = "omnicat",
+    version,
+    about = "Universal file preview — a context-aware cat",
+    long_about = LONG_ABOUT,
+    after_help = AFTER_HELP,
+    disable_help_subcommand = true,
+    args_override_self = true,
+    arg_required_else_help = true
+)]
+struct OmniCli {
+    #[command(flatten)]
+    preview: PreviewOpts,
+
+    #[command(flatten)]
+    inspect: InspectOpts,
+
+    #[command(flatten)]
+    output: OutputOpts,
+
+    /// Force vanilla system cat
+    #[arg(long = "native")]
+    native: bool,
+
+    /// Show handlers and settings
+    #[arg(long = "status")]
+    status: bool,
+
+    /// Emit shell integration wrapper (`zsh` / `bash` / `powershell`)
+    #[arg(long = "init", value_name = "SHELL", num_args = 0..=1, default_missing_value = "zsh")]
+    init: Option<String>,
+
+    /// File, directory, or virtual archive path (`archive.zip/inner.txt`)
+    #[arg(value_name = "PATH")]
+    paths: Vec<PathBuf>,
+}
+
+const LONG_ABOUT: &str = "\
+Preview almost any file in the terminal (or GUI with --preview). \
+Pipes, redirects, multiple files, and unknown flags behave like plain cat.
+
+Inspector flags (--info, --find, --query, …) always write to stdout, \
+including when piped. Combine them with --json for scripts.";
+
+const AFTER_HELP: &str = "\
+Configuration:
+  $OMNICAT_CONFIG (alias: $SMARTCAT_CONFIG)
+  ${XDG_CONFIG_HOME:-$HOME/.config}/omnicat/config.yaml
+  bundled config.default.yaml
+
+Examples:
+  omnicat README.md
+  omnicat -i --json image.png
+  omnicat app.jsonl --find 'level:error'
+  omnicat -f TODO archive.zip
+  omnicat db.sqlite -q 'SELECT * FROM users LIMIT 5'
+  omnicat backup.sql
+  omnicat backup.sql --schema
+  omnicat backup.sql --table users
+  omnicat backup.sql -q \"SELECT * FROM users LIMIT 5\" --progress
+  omnicat notes.epub --paginate
+  omnicat notes.epub --page 3
+  omnicat demo/files/sample-large.csv --all
+  omnicat -d a.json b.json
+  omnicat --hash file.bin --progress
+  omnicat --duplicates ~/Downloads
+  omnicat --capabilities
+  omnicat --status
+
+Cargo tip: pass flags after -- , e.g. cargo run -- file.csv --all
+";
+
+/// Preview / pager options (shared via flatten).
+#[derive(Debug, Clone, Default, Args)]
+#[command(next_help_heading = "Preview")]
+struct PreviewOpts {
+    /// Open a native preview window (if GUI available)
+    #[arg(short = 'p', long = "preview")]
+    preview: bool,
+
+    /// Preview window only, no terminal output
+    #[arg(long = "preview-only")]
+    preview_only: bool,
+
+    /// Print one page of terminal output (page 1) with a page footer
+    #[arg(short = 'g', long = "paginate")]
+    paginate: bool,
+
+    /// Print page N of terminal output (1-based; implies paging)
+    #[arg(long = "page", value_name = "N")]
+    page: Option<usize>,
+}
+
+/// Machine-output and safety knobs (shared via flatten).
+#[derive(Debug, Clone, Default, Args)]
+#[command(next_help_heading = "Output")]
+struct OutputOpts {
+    /// Machine-readable JSON for inspect modes
+    #[arg(short = 'j', long = "json")]
+    json: bool,
+
+    /// Disable byte and row limits for inspect modes
+    #[arg(short = 'a', long = "all")]
+    all: bool,
+
+    /// Allow raw control / escape characters in text output
+    #[arg(short = 'u', long = "unsafe")]
+    allow_unsafe: bool,
+
+    /// Show throttled progress on stderr for long scans
+    #[arg(long = "progress")]
+    progress: bool,
+}
+
+/// Artifact inspector options (shared via flatten).
+#[derive(Debug, Clone, Default, Args)]
+#[command(next_help_heading = "Inspect")]
+struct InspectOpts {
+    /// Type-specific file metadata
+    #[arg(short = 'i', long = "info")]
+    info: bool,
+
+    /// Schema / structure summary
+    #[arg(long = "schema")]
+    schema: bool,
+
+    /// SQL dump: show a single table (structure + data)
+    #[arg(long = "table", value_name = "NAME")]
+    table: Option<String>,
+
+    /// Aggregate stats
+    #[arg(long = "stats")]
+    stats: bool,
+
+    /// Detected handler / type only
+    #[arg(short = 't', long = "type")]
+    type_only: bool,
+
+    /// MIME type only
+    #[arg(long = "mime")]
+    mime_only: bool,
+
+    /// Text encoding details
+    #[arg(long = "encoding")]
+    encoding: bool,
+
+    /// List inspect capabilities
+    #[arg(long = "capabilities")]
+    capabilities: bool,
+
+    /// Search / filter content
+    #[arg(short = 'f', long = "find", value_name = "PATTERN")]
+    find: Option<String>,
+
+    /// SQL / structured query
+    #[arg(short = 'q', long = "query", value_name = "QUERY")]
+    query: Option<String>,
+
+    /// Extra predicate for tabular data
+    #[arg(long = "where", value_name = "EXPR")]
+    where_clause: Option<String>,
+
+    /// Show column names
+    #[arg(long = "columns")]
+    columns: bool,
+
+    /// First N lines / rows
+    #[arg(long = "head", value_name = "N")]
+    head: Option<usize>,
+
+    /// Last N lines / rows
+    #[arg(long = "tail", value_name = "N")]
+    tail: Option<usize>,
+
+    /// Re-run on file changes
+    #[arg(short = 'w', long = "watch")]
+    watch: bool,
+
+    /// Follow appended lines (tail -f)
+    #[arg(short = 'F', long = "follow")]
+    follow: bool,
+
+    /// Level filter for --follow (e.g. error, warn+)
+    #[arg(long = "level", value_name = "LEVEL")]
+    level: Option<String>,
+
+    /// Extract plain text
+    #[arg(long = "text")]
+    text: bool,
+
+    /// Raw bytes to stdout
+    #[arg(long = "raw")]
+    raw: bool,
+
+    /// Content hashes
+    #[arg(long = "hash")]
+    hash: bool,
+
+    /// Find duplicate files under a directory
+    #[arg(long = "duplicates")]
+    duplicates: bool,
+
+    /// Diff two files
+    #[arg(short = 'd', long = "diff", value_name = "PATH", num_args = 2)]
+    diff: Vec<String>,
+}
+
+#[derive(Debug)]
 pub struct Cli {
     pub command: Command,
 }
 
 impl Cli {
-    pub fn help_text() -> &'static str {
-        r"omnicat - universal file preview for terminal and GUI
-
-Usage:
-  omnicat <file>              Render a file when stdout is a TTY
-  omnicat --preview <file>    Open a native preview window (if GUI available)
-  omnicat --preview-only <file>  Preview window only, no terminal output
-  omnicat --paginate <file>      Interactive pager for long terminal output
-  omnicat -native ...           Force the vanilla cat
-
-Pager keys (--paginate, long output on a TTY):
-  Space, Enter, j, ↓, PgDn  next page
-  b, k, ↑, PgUp             previous page
-  g / G                     first / last page
-  q, Esc                    exit
-  omnicat -status               Show handlers and settings
-  omnicat init zsh              Shell integration for zsh
-  omnicat init bash             Shell integration for bash
-  omnicat init powershell       Shell integration for PowerShell
-  omnicat --help                Show this help
-  omnicat --version             Show version
-
-Behavior:
-  omnicat renders files with built-in viewers in the terminal, or in a GUI
-  window with --preview. Pipes, redirects, multiple files, and flags behave
-  like plain cat — byte for byte.
-
-Configuration:
-  $OMNICAT_CONFIG (alias: $SMARTCAT_CONFIG)
-  ${XDG_CONFIG_HOME:-$HOME/.config}/omnicat/config.yaml
-  bundled config.default.yaml
-"
+    pub fn parse() -> Self {
+        match Self::try_parse_from(std::env::args_os()) {
+            Ok(cli) => cli,
+            Err(err) => err.exit(),
+        }
     }
 
-    pub fn parse() -> Self {
-        let args: Vec<String> = std::env::args().collect();
-        if args.len() <= 1 {
-            return Self {
-                command: Command::Help,
+    pub fn try_parse_from<I, T>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<OsString> + Clone,
+    {
+        let raw: Vec<OsString> = args.into_iter().map(Into::into).collect();
+        let normalized = normalize_legacy_flags(raw);
+
+        match OmniCli::try_parse_from(&normalized) {
+            Ok(cli) => Ok(Self {
+                command: cli.into_command(&normalized),
+            }),
+            Err(err) => match err.kind() {
+                clap::error::ErrorKind::DisplayHelp
+                | clap::error::ErrorKind::DisplayVersion
+                | clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => Err(err),
+                clap::error::ErrorKind::UnknownArgument
+                | clap::error::ErrorKind::InvalidSubcommand => Ok(Self {
+                    command: Command::Native {
+                        args: os_to_strings(&normalized[1..]),
+                    },
+                }),
+                _ => Err(err),
+            },
+        }
+    }
+
+    pub fn help_text() -> String {
+        OmniCli::command().render_long_help().to_string()
+    }
+}
+
+impl OmniCli {
+    fn into_command(self, normalized: &[OsString]) -> Command {
+        if self.status {
+            return Command::Status;
+        }
+        if let Some(shell) = self.init {
+            return Command::Init { shell };
+        }
+        if self.native {
+            return Command::Native {
+                args: self
+                    .paths
+                    .iter()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect(),
             };
         }
 
-        match args[1].as_str() {
-            "--version" | "-V" => Self {
-                command: Command::Version,
-            },
-            "--help" | "-h" => Self {
-                command: Command::Help,
-            },
-            "init" => {
-                let shell = args.get(2).cloned().unwrap_or_else(|| "zsh".to_string());
-                Self {
-                    command: Command::Init { shell },
-                }
+        let mut options = InspectOptions::from_clap(&self.inspect, &self.output);
+        let paths: Vec<String> = self
+            .paths
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+
+        if !self.inspect.diff.is_empty() {
+            if self.inspect.diff.len() == 2 {
+                options.diff = Some((self.inspect.diff[0].clone(), self.inspect.diff[1].clone()));
             }
-            "-status" | "--status" => Self {
-                command: Command::Status,
-            },
-            "-native" | "--native" => Self {
-                command: Command::Native {
-                    args: args[2..].to_vec(),
-                },
-            },
-            _ => Self::parse_file_command(&args[1..]),
+            return Command::Inspect {
+                path: None,
+                options,
+            };
+        }
+
+        if options.capabilities && paths.is_empty() {
+            return Command::Inspect {
+                path: None,
+                options,
+            };
+        }
+
+        if options.has_action() {
+            if paths.len() > 1 {
+                return Command::Native {
+                    args: os_to_strings(&normalized[1..]),
+                };
+            }
+            // SQL dumps: --schema / --table are preview modes, not SQLite inspect.
+            if paths.len() == 1 && is_sql_dump_path(&paths[0]) && options.is_sql_dump_view_only() {
+                let mut file_opts = FileOptions {
+                    preview: self.preview.preview || self.preview.preview_only,
+                    preview_only: self.preview.preview_only,
+                    paginate: self.preview.paginate,
+                    page: self.preview.page,
+                    allow_unsafe: self.output.allow_unsafe,
+                    schema_only: options.schema,
+                    table: options.table.clone(),
+                    progress: self.output.progress,
+                    all: self.output.all,
+                };
+                if file_opts.preview_only {
+                    file_opts.preview = true;
+                }
+                return Command::File {
+                    path: paths[0].clone(),
+                    options: file_opts,
+                };
+            }
+            return Command::Inspect {
+                path: paths.first().cloned(),
+                options,
+            };
+        }
+
+        if paths.len() != 1 {
+            return Command::Native {
+                args: os_to_strings(&normalized[1..]),
+            };
+        }
+
+        let mut file_opts = FileOptions {
+            preview: self.preview.preview || self.preview.preview_only,
+            preview_only: self.preview.preview_only,
+            paginate: self.preview.paginate,
+            page: self.preview.page,
+            allow_unsafe: self.output.allow_unsafe,
+            schema_only: false,
+            table: None,
+            progress: self.output.progress,
+            all: self.output.all,
+        };
+        if file_opts.preview_only {
+            file_opts.preview = true;
+        }
+
+        Command::File {
+            path: paths[0].clone(),
+            options: file_opts,
         }
     }
+}
 
-    fn parse_file_command(args: &[String]) -> Self {
-        let mut options = FileOptions::default();
-        let mut path: Option<String> = None;
+fn is_sql_dump_path(path: &str) -> bool {
+    let name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(path)
+        .to_ascii_lowercase();
+    name.ends_with(".sql")
+        || name.ends_with(".sql.gz")
+        || name.ends_with(".sql.zst")
+        || name.ends_with(".sql.zstd")
+        || name.ends_with(".sql.bz2")
+        || name.ends_with(".sql.xz")
+}
 
-        for arg in args {
-            match arg.as_str() {
-                "--preview" | "-p" => options.preview = true,
-                "--preview-only" => {
-                    options.preview = true;
-                    options.preview_only = true;
-                }
-                "--paginate" => options.paginate = true,
-                a if a.starts_with('-') => {
-                    return Self {
-                        command: Command::Native {
-                            args: args.to_vec(),
-                        },
-                    };
-                }
-                a => {
-                    if path.is_some() {
-                        return Self {
-                            command: Command::Native {
-                                args: args.to_vec(),
-                            },
-                        };
-                    }
-                    path = Some(a.to_string());
-                }
-            }
-        }
-
-        if let Some(path) = path {
-            Self {
-                command: Command::File { path, options },
-            }
-        } else {
-            Self {
-                command: Command::Help,
-            }
+impl InspectOptions {
+    fn from_clap(inspect: &InspectOpts, output: &OutputOpts) -> Self {
+        Self {
+            json: output.json,
+            info: inspect.info,
+            schema: inspect.schema,
+            table: inspect.table.clone(),
+            stats: inspect.stats,
+            type_only: inspect.type_only,
+            mime_only: inspect.mime_only,
+            encoding: inspect.encoding,
+            capabilities: inspect.capabilities,
+            find: inspect.find.clone(),
+            query: inspect.query.clone(),
+            where_clause: inspect.where_clause.clone(),
+            columns: inspect.columns,
+            head: inspect.head,
+            tail: inspect.tail,
+            watch: inspect.watch,
+            follow: inspect.follow,
+            level: inspect.level.clone(),
+            text: inspect.text,
+            raw: inspect.raw,
+            hash: inspect.hash,
+            duplicates: inspect.duplicates,
+            diff: None,
+            allow_unsafe: output.allow_unsafe,
+            all: output.all,
+            progress: output.progress,
         }
     }
+}
+
+/// Legacy `-status` / `-native` from docs/tests.
+fn normalize_legacy_flags(args: Vec<OsString>) -> Vec<OsString> {
+    if args.len() < 2 {
+        return args;
+    }
+    let mut out = Vec::with_capacity(args.len());
+    out.push(args[0].clone());
+    let first = args[1].to_string_lossy();
+    match first.as_ref() {
+        "-status" => {
+            out.push(OsString::from("--status"));
+            out.extend(args.into_iter().skip(2));
+        }
+        "-native" => {
+            out.push(OsString::from("--native"));
+            out.extend(args.into_iter().skip(2));
+        }
+        _ => out.extend(args.into_iter().skip(1)),
+    }
+    out
+}
+
+fn os_to_strings(args: &[OsString]) -> Vec<String> {
+    args.iter()
+        .map(|s| s.to_string_lossy().into_owned())
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn help_mentions_preview() {
-        assert!(Cli::help_text().contains("--preview"));
+    fn parse(args: &[&str]) -> Command {
+        let argv: Vec<OsString> = std::iter::once(OsString::from("omnicat"))
+            .chain(args.iter().map(|s| OsString::from(*s)))
+            .collect();
+        Cli::try_parse_from(argv).unwrap().command
     }
 
     #[test]
-    fn parse_preview_flag() {
-        let cli = parse_args(&["omnicat", "--preview", "file.md"]);
-        match cli.command {
-            Command::File { options, .. } => assert!(options.preview),
-            _ => panic!("expected file command"),
+    fn file_path() {
+        match parse(&["README.md"]) {
+            Command::File { path, .. } => assert_eq!(path, "README.md"),
+            other => panic!("expected file, got {other:?}"),
         }
     }
 
     #[test]
-    fn parse_paginate_flag() {
-        let cli = parse_args(&["omnicat", "--paginate", "file.py"]);
-        match cli.command {
-            Command::File { options, .. } => assert!(options.paginate),
-            _ => panic!("expected file command"),
+    fn status_flag() {
+        assert!(matches!(parse(&["--status"]), Command::Status));
+        assert!(matches!(parse(&["-status"]), Command::Status));
+    }
+
+    #[test]
+    fn inspect_info() {
+        match parse(&["-i", "x.png"]) {
+            Command::Inspect { path, options } => {
+                assert_eq!(path.as_deref(), Some("x.png"));
+                assert!(options.info);
+            }
+            other => panic!("expected inspect, got {other:?}"),
         }
     }
 
-    fn parse_args(args: &[&str]) -> Cli {
-        let old: Vec<String> = std::env::args().collect();
-        let _ = old;
-        // simulate by calling parse_file_command directly
-        Cli {
-            command: Cli::parse_file_command(
-                &args[1..].iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-            )
-            .command,
+    #[test]
+    fn rejects_log_subcommand() {
+        // Former `log`/`db` subcommands are now treated as paths / native fallthrough.
+        let argv = ["omnicat", "log", "app.log"];
+        let cmd = Cli::try_parse_from(argv).unwrap().command;
+        match cmd {
+            Command::File { path, .. } => assert_eq!(path, "log"),
+            Command::Native { .. } => {}
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn sql_dump_schema_routes_to_file() {
+        match parse(&["backup.sql", "--schema"]) {
+            Command::File { path, options } => {
+                assert_eq!(path, "backup.sql");
+                assert!(options.schema_only);
+                assert!(options.table.is_none());
+            }
+            other => panic!("expected file, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn sql_dump_table_routes_to_file() {
+        match parse(&["backup.sql", "--table", "users"]) {
+            Command::File { path, options } => {
+                assert_eq!(path, "backup.sql");
+                assert!(!options.schema_only);
+                assert_eq!(options.table.as_deref(), Some("users"));
+            }
+            other => panic!("expected file, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn sqlite_schema_stays_inspect() {
+        match parse(&["db.sqlite", "--schema"]) {
+            Command::Inspect { path, options } => {
+                assert_eq!(path.as_deref(), Some("db.sqlite"));
+                assert!(options.schema);
+            }
+            other => panic!("expected inspect, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn paginate_and_page_on_file() {
+        match parse(&["README.md", "--paginate"]) {
+            Command::File { options, .. } => {
+                assert!(options.paginate);
+                assert!(options.page.is_none());
+            }
+            other => panic!("expected file, got {other:?}"),
+        }
+        match parse(&["README.md", "--page", "3"]) {
+            Command::File { options, .. } => {
+                assert_eq!(options.page, Some(3));
+            }
+            other => panic!("expected file, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn progress_flag_on_inspect() {
+        match parse(&["backup.sql", "-f", "status:ok", "--progress"]) {
+            Command::Inspect { options, .. } => {
+                assert!(options.find.is_some());
+                assert!(options.progress);
+            }
+            other => panic!("expected inspect, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn progress_flag_on_file_preview() {
+        match parse(&["demo/files/sample-large.csv", "--progress"]) {
+            Command::File { path, options } => {
+                assert_eq!(path, "demo/files/sample-large.csv");
+                assert!(
+                    options.progress,
+                    "--progress must reach FileOptions, not be dropped"
+                );
+            }
+            other => panic!("expected File preview with --progress, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn all_flag_on_file_preview() {
+        match parse(&["demo/files/sample-large.csv", "--all"]) {
+            Command::File { path, options } => {
+                assert_eq!(path, "demo/files/sample-large.csv");
+                assert!(options.all, "--all must reach FileOptions for CSV preview");
+                assert!(!options.progress);
+            }
+            other => panic!("expected File preview with --all, got {other:?}"),
         }
     }
 }

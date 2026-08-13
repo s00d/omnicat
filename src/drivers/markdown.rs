@@ -21,7 +21,11 @@ pub struct MarkdownDriver;
 impl MarkdownDriver {
     pub fn render(&self, path: &Path, config: &OmnicatConfig, out: &mut dyn Write) -> Result<()> {
         let input = fs::read_to_string(path)?;
-        render_markdown_str(&input, config, out)
+        Self::render_str(&input, config, out)
+    }
+
+    pub fn render_str(input: &str, config: &OmnicatConfig, out: &mut dyn Write) -> Result<()> {
+        render_markdown_str(input, config, out)
     }
 }
 

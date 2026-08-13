@@ -6,6 +6,7 @@ use serde_json::Value;
 use crate::config::OmnicatConfig;
 use crate::content::{PreviewContent, PreviewContext};
 use crate::detect::HandlerKind;
+use crate::drivers::convert;
 use crate::drivers::PreviewDriver;
 
 pub struct NotebookDriver;
@@ -26,31 +27,50 @@ impl PreviewDriver for NotebookDriver {
     fn build(
         &self,
         path: &Path,
-        _config: &OmnicatConfig,
+        config: &OmnicatConfig,
         _ctx: &PreviewContext,
     ) -> Result<PreviewContent> {
         let raw = std::fs::read_to_string(path)?;
         let json: Value = serde_json::from_str(&raw).context("invalid ipynb json")?;
-        let mut slides = Vec::new();
+        let lang = notebook_language(&json);
+        let mut out = String::new();
         if let Some(cells) = json.get("cells").and_then(|c| c.as_array()) {
             for (i, cell) in cells.iter().enumerate() {
                 let cell_type = cell
                     .get("cell_type")
                     .and_then(|t| t.as_str())
                     .unwrap_or("cell");
-                let mut text = format!("## Cell {} ({cell_type})\n\n", i + 1);
-                if let Some(source) = cell.get("source") {
-                    text.push_str(&value_to_string(source));
+                out.push_str(&format!("## Cell {} ({cell_type})\n\n", i + 1));
+                let source = cell.get("source").map(value_to_string).unwrap_or_default();
+                match cell_type {
+                    "code" => {
+                        out.push_str("```");
+                        out.push_str(&lang);
+                        out.push('\n');
+                        out.push_str(source.trim_end());
+                        out.push_str("\n```\n\n");
+                    }
+                    _ => {
+                        out.push_str(source.trim_end());
+                        out.push_str("\n\n");
+                    }
                 }
-                slides.push(text);
             }
         }
-        if slides.is_empty() {
-            Ok(PreviewContent::Text(raw))
-        } else {
-            Ok(PreviewContent::Slides(slides))
+        if out.trim().is_empty() {
+            return Ok(PreviewContent::Text(raw));
         }
+        let md = convert::truncate_chars(&out, convert::preview_char_limit(config));
+        Ok(PreviewContent::Markdown(md))
     }
+}
+
+fn notebook_language(json: &Value) -> String {
+    json.pointer("/metadata/kernelspec/language")
+        .or_else(|| json.pointer("/metadata/language_info/name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("python")
+        .to_string()
 }
 
 fn value_to_string(v: &Value) -> String {

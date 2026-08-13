@@ -1,0 +1,3 @@
+2026-08-06T10:03:01Z level=INFO span=checkout trace_id=trace-001 span_id=span-a msg="cart validated"
+2026-08-06T10:03:02Z level=WARN span=checkout trace_id=trace-001 span_id=span-b msg="payment slow"
+2026-08-06T10:03:03Z level=ERROR span=checkout trace_id=trace-002 span_id=span-c msg="charge declined"

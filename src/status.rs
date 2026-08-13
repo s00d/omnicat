@@ -101,6 +101,12 @@ pub fn print_status() -> Result<()> {
         config.behavior.external_timeout_secs
     );
 
+    println!("\nINSPECT");
+    println!("  max_bytes: {}", config.inspect.max_bytes);
+    println!("  max_matches: {}", config.inspect.max_matches);
+    println!("  max_rows: {}", config.inspect.max_rows);
+    println!("  tip: omnicat --capabilities");
+
     Ok(())
 }
 
@@ -118,15 +124,17 @@ fn print_terminal_settings(cfg: &OmnicatConfig) {
     let mut buf = String::new();
     let _ = writeln!(buf, "  markdown.wrap_width: {}", t.markdown.wrap_width);
     let _ = writeln!(buf, "  code.line_numbers: {}", t.code.line_numbers);
-    let _ = writeln!(buf, "  code.theme: {}", t.code.theme);
+    let effective = crate::drivers::theme::resolve_theme_name(&t.code.theme);
+    if effective == t.code.theme {
+        let _ = writeln!(buf, "  code.theme: {}", t.code.theme);
+    } else {
+        let _ = writeln!(buf, "  code.theme: {} (-> {})", t.code.theme, effective);
+    }
     let _ = writeln!(buf, "  data.pretty: {}", t.data.pretty);
     let _ = writeln!(buf, "  image.protocol: {}", t.image.protocol);
     let _ = writeln!(buf, "  fallback.hex_cols: {}", t.fallback.hex_cols);
-    let _ = writeln!(
-        buf,
-        "  paginate.enabled: {}  page_lines: {}",
-        t.paginate.enabled, t.paginate.page_lines
-    );
+    let _ = writeln!(buf, "  paginate.page_lines: {}", t.paginate.page_lines);
+    let _ = writeln!(buf, "  document.max_chars: {}", t.document.max_chars);
     print!("{buf}");
 }
 
@@ -137,11 +145,6 @@ fn print_gui_settings(cfg: &OmnicatConfig) {
     let _ = writeln!(buf, "  theme.mode: {}", g.theme.mode);
     let _ = writeln!(buf, "  theme.font_size: {}", g.theme.font_size);
     let _ = writeln!(buf, "  spreadsheet.max_rows: {}", g.spreadsheet.max_rows);
-    let _ = writeln!(
-        buf,
-        "  document.max_paragraphs: {}",
-        g.document.max_paragraphs
-    );
     print!("{buf}");
 }
 

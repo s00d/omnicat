@@ -5,15 +5,21 @@ pub mod detect;
 pub mod drivers;
 pub mod gate;
 pub mod init;
+pub mod input;
+pub mod inspect;
+pub mod io;
 pub mod orchestrator;
 pub mod preview;
+pub mod search;
 pub mod sinks;
 pub mod status;
 
+#[doc(hidden)]
+pub mod bench_support;
+
 mod cat;
 
-use std::io::{self, Write};
-use std::path::Path;
+use std::io::Write;
 use std::process::ExitCode;
 
 use anyhow::Result;
@@ -23,6 +29,7 @@ use crate::cli::{Cli, Command, FileOptions};
 use crate::config::load_config;
 use crate::detect::HandlerKind;
 use crate::gate::should_render;
+use crate::inspect::InspectOptions;
 use crate::orchestrator::resolve::ResolvedHandler;
 use crate::orchestrator::{print_hint, PreviewOrchestrator};
 
@@ -33,12 +40,6 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Version => {
-            println!("{APP_NAME} {VERSION}");
-        }
-        Command::Help => {
-            print!("{}", Cli::help_text());
-        }
         Command::Init { shell } => {
             init::print_init(&shell)?;
         }
@@ -51,6 +52,9 @@ pub fn run() -> Result<()> {
         }
         Command::File { path, options } => {
             handle_file(&path, &options)?;
+        }
+        Command::Inspect { path, options } => {
+            handle_inspect(path.as_deref(), &options)?;
         }
     }
 
@@ -67,16 +71,46 @@ pub fn run_main() -> ExitCode {
     }
 }
 
+fn handle_inspect(path: Option<&str>, options: &InspectOptions) -> Result<()> {
+    let config = load_config()?;
+    inspect::run_inspect(path, options, &config)
+}
+
 fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
-    if !should_render(path) {
+    let input = match input::InputRef::parse(path) {
+        Ok(input) => input,
+        Err(_) => {
+            passthrough_cat(&[path])?;
+            return Ok(());
+        }
+    };
+
+    let render_path = input.path_for_ops();
+    let is_virtual = input.virtual_path.is_some();
+
+    // Plain preview still requires TTY; virtual archive paths always render.
+    if !is_virtual && !should_render(path) {
         passthrough_cat(&[path])?;
         return Ok(());
     }
 
-    let path = Path::new(path);
     let config = load_config()?;
+    let mut config = config;
+    if options.allow_unsafe {
+        config.inspect.allow_unsafe = true;
+    }
+    if options.all {
+        config.inspect.no_limit = true;
+        config.inspect.max_bytes = 0;
+        config.inspect.max_rows = 0;
+    }
 
-    let resolved = PreviewOrchestrator::resolve(path, &config).or_else(|| {
+    let mut preview_ctx = content::preview_context(render_path);
+    preview_ctx.sql_schema_only = options.schema_only;
+    preview_ctx.sql_table = options.table.clone();
+    preview_ctx.progress = options.progress;
+
+    let resolved = PreviewOrchestrator::resolve(render_path, &config).or_else(|| {
         if config.behavior.on_unknown_format == "fallback" {
             Some(ResolvedHandler::Builtin(HandlerKind::Fallback))
         } else {
@@ -86,7 +120,8 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
 
     if let Some(resolved) = resolved {
         if options.preview {
-            match preview::try_open_preview(path, &resolved, &config) {
+            match preview::try_open_preview_with_ctx(render_path, &resolved, &config, &preview_ctx)
+            {
                 Ok(true) => {
                     if options.preview_only {
                         return Ok(());
@@ -97,7 +132,7 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
                         "{APP_NAME}: GUI preview unavailable (no display); falling back to terminal render"
                     );
                     if config.behavior.preview_fallback == "cat" {
-                        passthrough_cat(&[path.to_string_lossy().as_ref()])?;
+                        passthrough_cat(&[path])?;
                         return Ok(());
                     }
                 }
@@ -111,12 +146,11 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
             return Ok(());
         }
 
-        let use_pagination = sinks::paginate::pagination_requested(&config, options.paginate)
+        let use_pagination = sinks::paginate::pagination_requested(options.paginate, options.page)
             && !sinks::paginate::skips_pagination(&resolved);
 
         let render_config = if use_pagination {
             let mut c = config.clone();
-            // Full text for the pager; screen size limits display, not extraction.
             c.terminal.document.max_chars = 0;
             c.terminal.plain = true;
             c
@@ -126,26 +160,29 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
 
         if use_pagination {
             let mut buf = Vec::new();
-            if let Err(err) = PreviewOrchestrator::render_terminal_resolved(
+            if let Err(err) = PreviewOrchestrator::render_terminal_resolved_with_ctx(
                 &resolved,
-                path,
+                render_path,
                 &render_config,
+                &preview_ctx,
                 &mut buf,
             ) {
                 eprintln!("{APP_NAME}: {err:#}");
                 if let Some(handler) = handler_config_for_resolved(&resolved, &config) {
                     print_hint(handler);
                 }
-                passthrough_cat(&[path.to_string_lossy().as_ref()])?;
+                passthrough_cat(&[path])?;
             } else {
-                sinks::paginate::write_paged(&buf, &config.terminal.paginate)?;
+                let page = options.page.unwrap_or(1);
+                sinks::paginate::write_page(&buf, &config.terminal.paginate, page)?;
             }
         } else {
-            let mut stdout = io::stdout().lock();
-            if let Err(err) = PreviewOrchestrator::render_terminal_resolved(
+            let mut stdout = std::io::stdout().lock();
+            if let Err(err) = PreviewOrchestrator::render_terminal_resolved_with_ctx(
                 &resolved,
-                path,
+                render_path,
                 &render_config,
+                &preview_ctx,
                 &mut stdout,
             ) {
                 drop(stdout);
@@ -153,13 +190,13 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
                 if let Some(handler) = handler_config_for_resolved(&resolved, &config) {
                     print_hint(handler);
                 }
-                passthrough_cat(&[path.to_string_lossy().as_ref()])?;
+                passthrough_cat(&[path])?;
             } else {
                 stdout.flush()?;
             }
         }
     } else {
-        passthrough_cat(&[path.to_string_lossy().as_ref()])?;
+        passthrough_cat(&[path])?;
     }
 
     Ok(())

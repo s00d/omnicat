@@ -1,9 +1,11 @@
 mod code;
+mod jsonl;
 mod tree;
 
 use std::path::PathBuf;
 
 pub use code::{ColoredSpan, HighlightedCode, HighlightedLine, RgbColor};
+pub use jsonl::{cell_value, format_log_line, json_log_level, plan_columns, JsonlColumns};
 pub use tree::{build_tree_from_entries, render_tree_unicode, FileTree, TreeNode};
 
 #[derive(Debug, Clone)]
@@ -30,8 +32,16 @@ pub struct ImageContent {
 pub struct MediaInfoContent {
     pub title: String,
     pub format: String,
+    pub container: Option<String>,
     pub duration_secs: Option<f64>,
     pub codec: Option<String>,
+    pub video: Option<String>,
+    pub audio: Option<String>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub fps: Option<f64>,
+    pub channels: Option<u16>,
+    pub sample_rate: Option<u32>,
     pub bitrate: Option<u64>,
     pub extra: Vec<(String, String)>,
 }
@@ -174,15 +184,31 @@ pub struct PreviewContext {
     pub path: PathBuf,
     pub mime: Option<String>,
     pub size: u64,
+    /// SQL dump: structure only (no INSERT data section).
+    pub sql_schema_only: bool,
+    /// SQL dump: filter to one table name.
+    pub sql_table: Option<String>,
+    /// Show throttled stderr progress while streaming tabular preview.
+    pub progress: bool,
 }
 
 pub fn preview_context(path: &std::path::Path) -> PreviewContext {
     let meta = std::fs::metadata(path).ok();
     let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+    // Sniff mime from a small prefix only — never read multi-GB files here.
+    const SNIFF: usize = 8 * 1024;
     let mime = if meta.as_ref().is_some_and(|m| m.is_file()) {
-        std::fs::read(path)
-            .ok()
-            .and_then(|b| infer::get(&b).map(|t| t.mime_type().to_string()))
+        let mut buf = vec![0u8; SNIFF];
+        match std::fs::File::open(path).and_then(|mut f| {
+            use std::io::Read;
+            f.read(&mut buf)
+        }) {
+            Ok(n) => {
+                buf.truncate(n);
+                infer::get(&buf).map(|t| t.mime_type().to_string())
+            }
+            Err(_) => None,
+        }
     } else {
         None
     };
@@ -190,5 +216,8 @@ pub fn preview_context(path: &std::path::Path) -> PreviewContext {
         path: path.to_path_buf(),
         mime,
         size,
+        sql_schema_only: false,
+        sql_table: None,
+        progress: false,
     }
 }

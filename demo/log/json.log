@@ -1,0 +1,3 @@
+{"timestamp":"2026-08-06T10:00:01Z","level":"info","service":"api","message":"Server started","request_id":"req-001"}
+{"timestamp":"2026-08-06T10:00:02Z","level":"warn","service":"api","message":"Slow query 842ms","request_id":"req-002"}
+{"timestamp":"2026-08-06T10:00:03Z","level":"error","service":"db","message":"Connection timeout","request_id":"req-003","trace_id":"trace-abc"}

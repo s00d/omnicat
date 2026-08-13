@@ -21,7 +21,6 @@ use crate::drivers::markdown::MarkdownDriver;
 use crate::drivers::media::MediaDriver;
 use crate::drivers::notebook::NotebookDriver;
 use crate::drivers::office::document::DocumentDriver;
-use crate::drivers::office::legacy::LegacyOfficeDriver;
 use crate::drivers::office::presentation::PresentationDriver;
 use crate::drivers::office::spreadsheet::SpreadsheetDriver;
 use crate::drivers::pdf::PdfDriver;
@@ -38,7 +37,6 @@ static DRIVERS: &[&dyn PreviewDriver] = &[
     &SpreadsheetDriver,
     &DocumentDriver,
     &PresentationDriver,
-    &LegacyOfficeDriver,
     &DirectoryDriver,
     &EbookDriver,
     &MediaDriver,
@@ -60,6 +58,20 @@ impl DriverRegistry {
     pub fn detect_builtin(path: &Path) -> Option<HandlerKind> {
         if path.is_dir() {
             return Some(HandlerKind::Directory);
+        }
+
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.ends_with(".sql.gz")
+            || name.ends_with(".sql.zst")
+            || name.ends_with(".sql.zstd")
+            || name.ends_with(".sql.bz2")
+            || name.ends_with(".sql.xz")
+        {
+            return Some(HandlerKind::Database);
         }
 
         if let Some(ext) = path
@@ -92,10 +104,18 @@ impl DriverRegistry {
     }
 
     pub fn build(kind: HandlerKind, path: &Path, config: &OmnicatConfig) -> Result<PreviewContent> {
+        Self::build_with_ctx(kind, path, config, &preview_context(path))
+    }
+
+    pub fn build_with_ctx(
+        kind: HandlerKind,
+        path: &Path,
+        config: &OmnicatConfig,
+        ctx: &crate::content::PreviewContext,
+    ) -> Result<PreviewContent> {
         let driver =
             Self::driver_for(kind).ok_or_else(|| anyhow::anyhow!("no driver for {kind}"))?;
-        let ctx = preview_context(path);
-        driver.build(path, config, &ctx)
+        driver.build(path, config, ctx)
     }
 
     pub fn extensions_for(kind: HandlerKind) -> Vec<&'static str> {
