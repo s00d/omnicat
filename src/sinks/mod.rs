@@ -1,5 +1,4 @@
 pub mod audio_playback;
-pub mod gui;
 pub mod paginate;
 pub mod progress;
 pub mod report;

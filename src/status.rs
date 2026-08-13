@@ -7,7 +7,6 @@ use crate::detect::HandlerKind;
 use crate::drivers::external::{external_status, first_available_command};
 use crate::orchestrator::resolve::handler_config_for_builtin;
 use crate::orchestrator::{custom_handlers, extensions_for};
-use crate::preview::availability::gui_available;
 use crate::VERSION;
 
 const APP_NAME: &str = "omnicat";
@@ -20,14 +19,6 @@ pub fn print_status() -> Result<()> {
 
     println!("{APP_NAME} {VERSION}");
     println!("config: {config_label}");
-    println!(
-        "gui: {}",
-        if gui_available() {
-            "available"
-        } else {
-            "unavailable"
-        }
-    );
     println!();
 
     println!("BUILT-IN HANDLERS");
@@ -90,11 +81,7 @@ pub fn print_status() -> Result<()> {
     println!("\nTERMINAL SETTINGS");
     print_terminal_settings(&config);
 
-    println!("\nGUI SETTINGS");
-    print_gui_settings(&config);
-
     println!("\nBEHAVIOR");
-    println!("  preview_fallback: {}", config.behavior.preview_fallback);
     println!("  on_unknown_format: {}", config.behavior.on_unknown_format);
     println!(
         "  external_timeout_secs: {}",
@@ -135,16 +122,6 @@ fn print_terminal_settings(cfg: &OmnicatConfig) {
     let _ = writeln!(buf, "  fallback.hex_cols: {}", t.fallback.hex_cols);
     let _ = writeln!(buf, "  paginate.page_lines: {}", t.paginate.page_lines);
     let _ = writeln!(buf, "  document.max_chars: {}", t.document.max_chars);
-    print!("{buf}");
-}
-
-fn print_gui_settings(cfg: &OmnicatConfig) {
-    let g = &cfg.gui;
-    let mut buf = String::new();
-    let _ = writeln!(buf, "  window: {}x{}", g.window.width, g.window.height);
-    let _ = writeln!(buf, "  theme.mode: {}", g.theme.mode);
-    let _ = writeln!(buf, "  theme.font_size: {}", g.theme.font_size);
-    let _ = writeln!(buf, "  spreadsheet.max_rows: {}", g.spreadsheet.max_rows);
     print!("{buf}");
 }
 

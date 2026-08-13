@@ -9,7 +9,6 @@ pub mod input;
 pub mod inspect;
 pub mod io;
 pub mod orchestrator;
-pub mod preview;
 pub mod search;
 pub mod sinks;
 pub mod status;
@@ -119,33 +118,6 @@ fn handle_file(path: &str, options: &FileOptions) -> Result<()> {
     });
 
     if let Some(resolved) = resolved {
-        if options.preview {
-            match preview::try_open_preview_with_ctx(render_path, &resolved, &config, &preview_ctx)
-            {
-                Ok(true) => {
-                    if options.preview_only {
-                        return Ok(());
-                    }
-                }
-                Ok(false) => {
-                    eprintln!(
-                        "{APP_NAME}: GUI preview unavailable (no display); falling back to terminal render"
-                    );
-                    if config.behavior.preview_fallback == "cat" {
-                        passthrough_cat(&[path])?;
-                        return Ok(());
-                    }
-                }
-                Err(err) => {
-                    eprintln!("{APP_NAME}: preview failed: {err:#}; falling back");
-                }
-            }
-        }
-
-        if options.preview_only {
-            return Ok(());
-        }
-
         let use_pagination = sinks::paginate::pagination_requested(options.paginate, options.page)
             && !sinks::paginate::skips_pagination(&resolved);
 

@@ -16,6 +16,8 @@ terminal:
     pretty: true
     table_border: true
     max_rows: 1000
+    max_cols: 50
+    header_row: true
   image:
     max_width: 0
     protocol: auto
@@ -26,10 +28,10 @@ terminal:
     max_entries: 500
     tree_style: unicode
   directory:
-    max_depth: 3
+    max_depth: 1
     max_entries: 500
     show_hidden: false
-    icons: true
+    icons: false
   fallback:
     max_bytes: 65536
     hex_cols: 16
@@ -43,44 +45,6 @@ inspect:
   max_bytes: 10485760
   max_matches: 200
   max_rows: 1000
-
-gui:
-  window:
-    width: 960
-    height: 720
-    resizable: true
-    title_template: "omnicat — {file}"
-    always_on_top: false
-  theme:
-    mode: auto
-    accent: "#6c9eff"
-    font_family: default
-    font_size: 14
-    line_height: 1.4
-  preview:
-    open_maximized: false
-    remember_size: true
-    show_toolbar: true
-    show_status_bar: true
-  spreadsheet:
-    max_rows: 500
-    max_cols: 50
-    header_row: true
-    grid_lines: true
-    freeze_header: true
-  image:
-    fit: contain
-    background: "#1e1e1e"
-    checkerboard: true
-  hex:
-    bytes_per_row: 16
-    uppercase: true
-    show_ascii: true
-  directory:
-    max_depth: 5
-    lazy_expand: true
-  markdown:
-    code_theme: ""
 
 # Optional external renderer chains (legacy smartcat-compatible).
 # Builtin drivers run when no external command succeeds.
@@ -102,6 +66,5 @@ gui:
 #     hint: "brew install jupytext"
 
 behavior:
-  preview_fallback: terminal
   on_unknown_format: fallback
   external_timeout_secs: 30

@@ -25,8 +25,6 @@ mod pty {
             .unwrap();
 
         let mut cmd = CommandBuilder::new(cargo_bin());
-        // Headless CI / non-interactive runners must not open GUI or block on audio.
-        cmd.env("OMNICAT_NO_GUI", "1");
         cmd.env("OMNICAT_NO_PLAYBACK", "1");
         for arg in args {
             cmd.arg(arg);
@@ -111,26 +109,6 @@ mod pty {
         let out = run_pty(&[&path]);
         assert!(out.contains("SENTINEL-PY"), "output: {out:?}");
         assert!(out.contains("\x1b["));
-    }
-
-    #[test]
-    fn preview_headless_fallback_in_tty() {
-        let tmp = tempfile::NamedTempFile::with_suffix(".txt").unwrap();
-        std::fs::write(tmp.path(), "SENTINEL-PREVIEW-FALLBACK\n").unwrap();
-        let path = tmp.path().to_string_lossy().to_string();
-
-        std::env::set_var("OMNICAT_NO_GUI", "1");
-        let out = run_pty(&["--preview", &path]);
-        std::env::remove_var("OMNICAT_NO_GUI");
-
-        assert!(
-            out.contains("GUI preview unavailable"),
-            "expected fallback message in output: {out:?}"
-        );
-        assert!(
-            out.contains("SENTINEL-PREVIEW-FALLBACK"),
-            "expected terminal fallback content: {out:?}"
-        );
     }
 }
 

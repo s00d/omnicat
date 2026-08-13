@@ -80,7 +80,7 @@ pub fn write_content(
             write!(out, "{}", hex_preview(&hex.bytes, cols))?;
         }
         PreviewContent::Image(_) => {
-            writeln!(out, "[image — use terminal image renderer or --preview]")?;
+            writeln!(out, "[image — no terminal image renderer]")?;
         }
         PreviewContent::MediaInfo(m) => {
             writeln!(out, "{}", m.title)?;

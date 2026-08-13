@@ -4,7 +4,6 @@ Preview this file with:
 
 ```bash
 omnicat demo/files/sample.md
-omnicat --preview demo/files/sample.md
 ```
 
 ## Table

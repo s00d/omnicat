@@ -1,3 +1,5 @@
+//! Directory / archive tree model and unicode rendering.
+
 #[derive(Debug, Clone, Default)]
 pub struct FileTree {
     pub title: Option<String>,
@@ -11,6 +13,8 @@ pub struct TreeNode {
     pub is_dir: bool,
     pub size: Option<u64>,
     pub mode: Option<String>,
+    /// When a directory was not expanded, approximate immediate child count.
+    pub entries_hint: Option<usize>,
     pub children: Vec<TreeNode>,
 }
 
@@ -22,6 +26,7 @@ impl TreeNode {
             is_dir: true,
             size: None,
             mode: None,
+            entries_hint: None,
             children: Vec::new(),
         }
     }
@@ -33,6 +38,17 @@ impl TreeNode {
         size: Option<u64>,
         mode: Option<String>,
     ) {
+        self.insert_entry_hint(entry_path, is_dir, size, mode, None);
+    }
+
+    pub fn insert_entry_hint(
+        &mut self,
+        entry_path: &str,
+        is_dir: bool,
+        size: Option<u64>,
+        mode: Option<String>,
+        entries_hint: Option<usize>,
+    ) {
         let parts: Vec<&str> = entry_path
             .trim_matches('/')
             .split('/')
@@ -41,7 +57,7 @@ impl TreeNode {
         if parts.is_empty() {
             return;
         }
-        Self::insert_parts(self, &parts, is_dir, size, mode);
+        Self::insert_parts(self, &parts, is_dir, size, mode, entries_hint);
     }
 
     fn insert_parts(
@@ -50,6 +66,7 @@ impl TreeNode {
         is_dir: bool,
         size: Option<u64>,
         mode: Option<String>,
+        entries_hint: Option<usize>,
     ) {
         let head = parts[0];
         let rest = &parts[1..];
@@ -66,6 +83,7 @@ impl TreeNode {
                 c.is_dir = is_dir;
                 c.size = size.or(c.size);
                 c.mode = mode.or(c.mode.take());
+                c.entries_hint = entries_hint.or(c.entries_hint);
             } else {
                 node.children.push(TreeNode {
                     name: head.to_string(),
@@ -73,6 +91,7 @@ impl TreeNode {
                     is_dir,
                     size,
                     mode,
+                    entries_hint,
                     children: Vec::new(),
                 });
             }
@@ -84,7 +103,7 @@ impl TreeNode {
                 node.children.last_mut().unwrap()
             };
             child.is_dir = true;
-            Self::insert_parts(child, rest, is_dir, size, mode);
+            Self::insert_parts(child, rest, is_dir, size, mode, entries_hint);
         }
     }
 
@@ -104,17 +123,21 @@ impl TreeNode {
     }
 }
 
+/// Entry: relative path, is_dir, size, mode, optional collapsed child-count hint.
+pub type TreeEntry = (String, bool, Option<u64>, Option<String>, Option<usize>);
+
 pub fn build_tree_from_entries(
     title: Option<String>,
-    entries: impl IntoIterator<Item = (String, bool, Option<u64>, Option<String>)>,
+    entries: impl IntoIterator<Item = TreeEntry>,
     max_entries: usize,
 ) -> FileTree {
-    let mut root = TreeNode::new_dir(".", "");
-    for (count, (path, is_dir, size, mode)) in entries.into_iter().enumerate() {
+    // Empty name/path = invisible root (no leading indent).
+    let mut root = TreeNode::new_dir("", "");
+    for (count, (path, is_dir, size, mode, hint)) in entries.into_iter().enumerate() {
         if count >= max_entries {
             break;
         }
-        root.insert_entry(&path, is_dir, size, mode);
+        root.insert_entry_hint(&path, is_dir, size, mode, hint);
     }
     root.sort_recursive();
     FileTree { title, root }
@@ -127,7 +150,8 @@ pub fn render_tree_unicode(
     icons: bool,
     out: &mut String,
 ) {
-    if !node.name.is_empty() || !node.path.is_empty() {
+    let is_root = node.name.is_empty() && node.path.is_empty();
+    if !is_root {
         let branch = if is_last { "└── " } else { "├── " };
         let icon = if icons {
             if node.is_dir {
@@ -138,24 +162,14 @@ pub fn render_tree_unicode(
         } else {
             ""
         };
-        let size = node.size.map(|s| format!(" ({s} B)")).unwrap_or_default();
-        let mode = node
-            .mode
-            .as_ref()
-            .map(|m| format!(" {m}"))
-            .unwrap_or_default();
-        if !node.path.is_empty() || node.name != "." {
-            out.push_str(prefix);
-            out.push_str(branch);
-            out.push_str(icon);
-            out.push_str(&node.name);
-            out.push_str(&size);
-            out.push_str(&mode);
-            out.push('\n');
-        }
+        out.push_str(prefix);
+        out.push_str(branch);
+        out.push_str(icon);
+        out.push_str(&format_node_label(node));
+        out.push('\n');
     }
 
-    let child_prefix = if node.name.is_empty() && node.path.is_empty() {
+    let child_prefix = if is_root {
         prefix.to_string()
     } else if is_last {
         format!("{prefix}    ")
@@ -169,18 +183,80 @@ pub fn render_tree_unicode(
     }
 }
 
+fn format_node_label(node: &TreeNode) -> String {
+    if node.is_dir {
+        let mut s = format!("{}/", node.name);
+        if node.children.is_empty() {
+            if let Some(n) = node.entries_hint {
+                s.push_str(&format!("  ({n})"));
+            }
+        }
+        s
+    } else {
+        let size = node
+            .size
+            .map(|b| format!("  {}", human_bytes(b)))
+            .unwrap_or_default();
+        // Symlink targets are already baked into `name` as `name -> target`.
+        let mode = node
+            .mode
+            .as_ref()
+            .filter(|m| !m.starts_with('d') && !m.starts_with('-'))
+            .map(|m| format!("  {m}"))
+            .unwrap_or_default();
+        format!("{}{size}{mode}", node.name)
+    }
+}
+
+fn human_bytes(n: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut v = n as f64;
+    let mut i = 0usize;
+    while v >= 1024.0 && i + 1 < UNITS.len() {
+        v /= 1024.0;
+        i += 1;
+    }
+    if i == 0 {
+        format!("{n} {}", UNITS[i])
+    } else {
+        format!("{v:.1} {}", UNITS[i])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn nested_paths_build_tree() {
-        let mut root = TreeNode::new_dir(".", "");
+        let mut root = TreeNode::new_dir("", "");
         root.insert_entry("a/b/c.txt", false, Some(10), None);
         root.insert_entry("a/d.txt", false, Some(5), None);
         root.sort_recursive();
         assert_eq!(root.children.len(), 1);
         assert_eq!(root.children[0].name, "a");
         assert_eq!(root.children[0].children.len(), 2);
+    }
+
+    #[test]
+    fn root_has_no_leading_indent() {
+        let tree = build_tree_from_entries(
+            None,
+            vec![
+                ("a.txt".into(), false, Some(10), None, None),
+                ("sub".into(), true, None, None, Some(3)),
+            ],
+            100,
+        );
+        let mut out = String::new();
+        render_tree_unicode(&tree.root, "", true, false, &mut out);
+        assert!(
+            out.starts_with("├── ") || out.starts_with("└── "),
+            "unexpected leading indent: {out:?}"
+        );
+        assert!(out.contains("sub/  (3)"));
+        assert!(out.contains("a.txt  10 B"));
+        assert!(!out.contains("drwx"));
+        assert!(!out.contains('📁'));
     }
 }

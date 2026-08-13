@@ -92,7 +92,10 @@ fn build_archive_tree(path: &Path, config: &OmnicatConfig) -> Result<FileTree> {
 
     Ok(build_tree_from_entries(
         title,
-        entries.into_iter().take(max),
+        entries
+            .into_iter()
+            .take(max)
+            .map(|(p, d, s, m)| (p, d, s, m, None)),
         max,
     ))
 }

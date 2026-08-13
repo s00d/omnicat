@@ -167,12 +167,7 @@ fn preview_row_limit(config: &OmnicatConfig) -> usize {
     if config.inspect.no_limit || config.inspect.max_rows == 0 {
         return usize::MAX;
     }
-    config
-        .gui
-        .spreadsheet
-        .max_rows
-        .min(config.terminal.data.max_rows)
-        .max(1)
+    config.terminal.data.max_rows.max(1)
 }
 
 fn parse_delimited_path(
@@ -192,7 +187,7 @@ fn parse_delimited_path(
         file,
         delimiter,
         max_rows,
-        config.gui.spreadsheet.header_row,
+        config.terminal.data.header_row,
         Some(&mut progress),
         ctx.size,
     )?;
@@ -232,7 +227,7 @@ fn render_delimited_path_terminal_with(
         file,
         delimiter,
         max_rows,
-        config.gui.spreadsheet.header_row,
+        config.terminal.data.header_row,
         Some(progress),
         ctx.size,
     )?;
@@ -459,7 +454,7 @@ fn build_parquet_table(path: &Path, config: &OmnicatConfig) -> Result<PreviewCon
             format!("{:?}", col.physical_type()),
         ]);
     }
-    let max_rows = config.gui.spreadsheet.max_rows.min(20);
+    let max_rows = config.terminal.data.max_rows.min(20);
     let mut preview = Table::new();
     preview.load_preset(UTF8_FULL);
     if let Ok(batch_reader) =
@@ -538,7 +533,7 @@ fn build_feather_table(path: &Path, config: &OmnicatConfig) -> Result<PreviewCon
             format!("{:?}", field.data_type()),
         ]);
     }
-    let max_rows = config.gui.spreadsheet.max_rows.min(20);
+    let max_rows = config.terminal.data.max_rows.min(20);
     let mut preview = Table::new();
     preview.load_preset(UTF8_FULL);
     if let Some(Ok(batch)) = reader.into_iter().next() {
@@ -608,8 +603,7 @@ mod tests {
 
         let mut cfg = OmnicatConfig::default();
         cfg.terminal.data.max_rows = 500;
-        cfg.gui.spreadsheet.max_rows = 500;
-        cfg.gui.spreadsheet.header_row = true;
+        cfg.terminal.data.header_row = true;
 
         let mut ctx = crate::content::preview_context(&path);
         ctx.progress = true;
@@ -649,7 +643,6 @@ mod tests {
 
         let mut cfg = OmnicatConfig::default();
         cfg.terminal.data.max_rows = 500;
-        cfg.gui.spreadsheet.max_rows = 500;
         cfg.inspect.no_limit = true;
         cfg.inspect.max_rows = 0;
 

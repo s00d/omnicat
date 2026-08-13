@@ -9,8 +9,6 @@ pub struct OmnicatConfig {
     #[serde(default, alias = "display")]
     pub terminal: TerminalSettings,
     #[serde(default)]
-    pub gui: GuiSettings,
-    #[serde(default)]
     pub behavior: BehaviorSettings,
     #[serde(default)]
     pub inspect: InspectSettings,
@@ -86,29 +84,7 @@ pub struct PaginateDisplay {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiSettings {
-    #[serde(default)]
-    pub window: GuiWindow,
-    #[serde(default)]
-    pub theme: GuiTheme,
-    #[serde(default)]
-    pub preview: GuiPreview,
-    #[serde(default)]
-    pub spreadsheet: GuiSpreadsheet,
-    #[serde(default)]
-    pub image: GuiImage,
-    #[serde(default)]
-    pub hex: GuiHex,
-    #[serde(default)]
-    pub directory: GuiDirectory,
-    #[serde(default)]
-    pub markdown: GuiMarkdown,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BehaviorSettings {
-    #[serde(default = "default_preview_fallback")]
-    pub preview_fallback: String,
     #[serde(default = "default_on_unknown")]
     pub on_unknown_format: String,
     #[serde(default = "default_external_timeout")]
@@ -147,6 +123,10 @@ pub struct DataDisplay {
     pub table_border: bool,
     #[serde(default = "default_max_rows")]
     pub max_rows: usize,
+    #[serde(default = "default_max_cols")]
+    pub max_cols: usize,
+    #[serde(default = "default_true")]
+    pub header_row: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -181,7 +161,7 @@ pub struct DirectoryDisplay {
     pub max_entries: usize,
     #[serde(default)]
     pub show_hidden: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub icons: bool,
 }
 
@@ -193,94 +173,6 @@ pub struct FallbackDisplay {
     pub hex_cols: usize,
     #[serde(default = "default_true")]
     pub show_metadata: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiWindow {
-    #[serde(default = "default_window_width")]
-    pub width: u32,
-    #[serde(default = "default_window_height")]
-    pub height: u32,
-    #[serde(default = "default_true")]
-    pub resizable: bool,
-    #[serde(default = "default_title_template")]
-    pub title_template: String,
-    #[serde(default)]
-    pub always_on_top: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiTheme {
-    #[serde(default = "default_theme_mode")]
-    pub mode: String,
-    #[serde(default = "default_accent")]
-    pub accent: String,
-    #[serde(default = "default_font_family")]
-    pub font_family: String,
-    #[serde(default = "default_font_size")]
-    pub font_size: f32,
-    #[serde(default = "default_line_height")]
-    pub line_height: f32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiPreview {
-    #[serde(default)]
-    pub open_maximized: bool,
-    #[serde(default = "default_true")]
-    pub remember_size: bool,
-    #[serde(default = "default_true")]
-    pub show_toolbar: bool,
-    #[serde(default = "default_true")]
-    pub show_status_bar: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiSpreadsheet {
-    #[serde(default = "default_gui_max_rows")]
-    pub max_rows: usize,
-    #[serde(default = "default_gui_max_cols")]
-    pub max_cols: usize,
-    #[serde(default = "default_true")]
-    pub header_row: bool,
-    #[serde(default = "default_true")]
-    pub grid_lines: bool,
-    #[serde(default = "default_true")]
-    pub freeze_header: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiImage {
-    #[serde(default = "default_image_fit")]
-    pub fit: String,
-    #[serde(default = "default_image_bg")]
-    pub background: String,
-    #[serde(default = "default_true")]
-    pub checkerboard: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiHex {
-    #[serde(default = "default_hex_cols")]
-    pub bytes_per_row: usize,
-    #[serde(default = "default_true")]
-    pub uppercase: bool,
-    #[serde(default = "default_true")]
-    pub show_ascii: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiMarkdown {
-    #[serde(default)]
-    pub code_theme: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct GuiDirectory {
-    #[serde(default = "default_gui_dir_depth")]
-    pub max_depth: usize,
-    #[serde(default = "default_true")]
-    pub lazy_expand: bool,
 }
 
 fn default_theme() -> String {
@@ -313,14 +205,14 @@ fn default_protocol() -> String {
 fn default_max_rows() -> usize {
     1000
 }
+fn default_max_cols() -> usize {
+    50
+}
 fn default_max_bytes() -> usize {
     65536
 }
 fn default_hex_cols() -> usize {
     16
-}
-fn default_preview_fallback() -> String {
-    "terminal".into()
 }
 fn default_on_unknown() -> String {
     "fallback".into()
@@ -328,45 +220,9 @@ fn default_on_unknown() -> String {
 fn default_external_timeout() -> u64 {
     30
 }
-fn default_window_width() -> u32 {
-    960
-}
-fn default_window_height() -> u32 {
-    720
-}
-fn default_title_template() -> String {
-    "omnicat — {file}".into()
-}
-fn default_theme_mode() -> String {
-    "auto".into()
-}
-fn default_accent() -> String {
-    "#6c9eff".into()
-}
-fn default_font_family() -> String {
-    "default".into()
-}
-fn default_font_size() -> f32 {
-    14.0
-}
-fn default_line_height() -> f32 {
-    1.4
-}
-fn default_gui_max_rows() -> usize {
-    500
-}
-fn default_gui_max_cols() -> usize {
-    50
-}
 
 fn default_terminal_document_max_chars() -> usize {
     5000
-}
-fn default_image_fit() -> String {
-    "contain".into()
-}
-fn default_image_bg() -> String {
-    "#1e1e1e".into()
 }
 fn default_max_entries() -> usize {
     500
@@ -375,10 +231,9 @@ fn default_tree_style() -> String {
     "unicode".into()
 }
 fn default_dir_depth() -> usize {
-    3
-}
-fn default_gui_dir_depth() -> usize {
-    5
+    // Shallow preview: immediate children only (+ collapsed hints).
+    // Deeper nesting is unreadable in a TTY; use `--all` to expand.
+    1
 }
 fn default_inspect_max_bytes() -> usize {
     10_485_760 // 10 MB
@@ -450,54 +305,6 @@ impl Default for TerminalDocumentDisplay {
     }
 }
 
-impl Default for GuiWindow {
-    fn default() -> Self {
-        OmnicatConfig::default().gui.window
-    }
-}
-
-impl Default for GuiTheme {
-    fn default() -> Self {
-        OmnicatConfig::default().gui.theme
-    }
-}
-
-impl Default for GuiPreview {
-    fn default() -> Self {
-        OmnicatConfig::default().gui.preview
-    }
-}
-
-impl Default for GuiSpreadsheet {
-    fn default() -> Self {
-        OmnicatConfig::default().gui.spreadsheet
-    }
-}
-
-impl Default for GuiImage {
-    fn default() -> Self {
-        OmnicatConfig::default().gui.image
-    }
-}
-
-impl Default for GuiHex {
-    fn default() -> Self {
-        OmnicatConfig::default().gui.hex
-    }
-}
-
-impl Default for GuiDirectory {
-    fn default() -> Self {
-        OmnicatConfig::default().gui.directory
-    }
-}
-
-impl Default for GuiMarkdown {
-    fn default() -> Self {
-        OmnicatConfig::default().gui.markdown
-    }
-}
-
 impl Default for OmnicatConfig {
     fn default() -> Self {
         serde_yaml::from_str(include_str!("../../assets/config.default.yaml"))
@@ -508,12 +315,6 @@ impl Default for OmnicatConfig {
 impl Default for TerminalSettings {
     fn default() -> Self {
         OmnicatConfig::default().terminal
-    }
-}
-
-impl Default for GuiSettings {
-    fn default() -> Self {
-        OmnicatConfig::default().gui
     }
 }
 
@@ -543,7 +344,8 @@ mod tests {
     fn bundled_config_parses() {
         let cfg = OmnicatConfig::default();
         assert_eq!(cfg.terminal.code.line_numbers, true);
-        assert_eq!(cfg.gui.window.width, 960);
+        assert_eq!(cfg.terminal.data.max_rows, 1000);
+        assert_eq!(cfg.terminal.directory.max_depth, 1);
     }
 
     #[test]

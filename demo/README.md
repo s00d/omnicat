@@ -1,6 +1,6 @@
 # Demo fixtures for omnicat
 
-Sample files for manual testing of terminal preview, `--preview` GUI, and inspect (`--find`, `-q`, …).
+Sample files for manual testing of terminal preview and inspect (`--find`, `-q`, …).
 
 ## Demo GIF
 
@@ -45,7 +45,6 @@ BIN=./target/release/omnicat
 # Terminal
 $BIN demo/files/sample.md
 $BIN demo/files/sample.rs
-$BIN --preview demo/files/sample.md
 
 # Search / query
 $BIN demo/db/sample.sql -q "SELECT * FROM users WHERE status = 'ok'"

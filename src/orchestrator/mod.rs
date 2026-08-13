@@ -13,7 +13,6 @@ use crate::drivers::external;
 use crate::drivers::image::ImageDriver;
 use crate::drivers::markdown::MarkdownDriver;
 use crate::drivers::media::MediaDriver;
-use crate::sinks::gui;
 use crate::sinks::terminal;
 
 pub mod registry;
@@ -138,10 +137,6 @@ impl PreviewOrchestrator {
         out: &mut dyn Write,
     ) -> Result<()> {
         Self::render_terminal_resolved(&ResolvedHandler::Builtin(kind), path, config, out)
-    }
-
-    pub fn open_gui(path: &Path, config: &OmnicatConfig, content: &PreviewContent) -> Result<()> {
-        gui::run(path, config, content)
     }
 
     pub fn hint_for(resolved: &ResolvedHandler, config: &OmnicatConfig) -> Option<String> {

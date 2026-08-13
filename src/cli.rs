@@ -10,8 +10,6 @@ use crate::inspect::InspectOptions;
 
 #[derive(Debug, Clone, Default)]
 pub struct FileOptions {
-    pub preview: bool,
-    pub preview_only: bool,
     pub paginate: bool,
     /// 1-based page when using static pagination (`--page`).
     pub page: Option<usize>,
@@ -85,7 +83,7 @@ struct OmniCli {
 }
 
 const LONG_ABOUT: &str = "\
-Preview almost any file in the terminal (or GUI with --preview). \
+Preview almost any file in the terminal. \
 Pipes, redirects, multiple files, and unknown flags behave like plain cat.
 
 Inspector flags (--info, --find, --query, …) always write to stdout, \
@@ -123,14 +121,6 @@ Cargo tip: pass flags after -- , e.g. cargo run -- file.csv --all
 #[derive(Debug, Clone, Default, Args)]
 #[command(next_help_heading = "Preview")]
 struct PreviewOpts {
-    /// Open a native preview window (if GUI available)
-    #[arg(short = 'p', long = "preview")]
-    preview: bool,
-
-    /// Preview window only, no terminal output
-    #[arg(long = "preview-only")]
-    preview_only: bool,
-
     /// Print one page of terminal output (page 1) with a page footer
     #[arg(short = 'g', long = "paginate")]
     paginate: bool,
@@ -349,9 +339,7 @@ impl OmniCli {
             }
             // SQL dumps: --schema / --table are preview modes, not SQLite inspect.
             if paths.len() == 1 && is_sql_dump_path(&paths[0]) && options.is_sql_dump_view_only() {
-                let mut file_opts = FileOptions {
-                    preview: self.preview.preview || self.preview.preview_only,
-                    preview_only: self.preview.preview_only,
+                let file_opts = FileOptions {
                     paginate: self.preview.paginate,
                     page: self.preview.page,
                     allow_unsafe: self.output.allow_unsafe,
@@ -360,9 +348,6 @@ impl OmniCli {
                     progress: self.output.progress,
                     all: self.output.all,
                 };
-                if file_opts.preview_only {
-                    file_opts.preview = true;
-                }
                 return Command::File {
                     path: paths[0].clone(),
                     options: file_opts,
@@ -380,9 +365,7 @@ impl OmniCli {
             };
         }
 
-        let mut file_opts = FileOptions {
-            preview: self.preview.preview || self.preview.preview_only,
-            preview_only: self.preview.preview_only,
+        let file_opts = FileOptions {
             paginate: self.preview.paginate,
             page: self.preview.page,
             allow_unsafe: self.output.allow_unsafe,
@@ -391,9 +374,6 @@ impl OmniCli {
             progress: self.output.progress,
             all: self.output.all,
         };
-        if file_opts.preview_only {
-            file_opts.preview = true;
-        }
 
         Command::File {
             path: paths[0].clone(),

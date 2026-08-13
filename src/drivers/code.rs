@@ -66,12 +66,7 @@ impl CodeDriver {
     }
 
     fn code_theme_name(config: &OmnicatConfig) -> &str {
-        let gui_theme = config.gui.markdown.code_theme.trim();
-        if gui_theme.is_empty() {
-            config.terminal.code.theme.as_str()
-        } else {
-            gui_theme
-        }
+        config.terminal.code.theme.as_str()
     }
 }
 

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 pub use code::{ColoredSpan, HighlightedCode, HighlightedLine, RgbColor};
 pub use jsonl::{cell_value, format_log_line, json_log_level, plan_columns, JsonlColumns};
-pub use tree::{build_tree_from_entries, render_tree_unicode, FileTree, TreeNode};
+pub use tree::{build_tree_from_entries, render_tree_unicode, FileTree, TreeEntry, TreeNode};
 
 #[derive(Debug, Clone)]
 pub struct TableContent {

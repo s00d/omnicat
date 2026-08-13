@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.9.0-blue?style=for-the-badge)](https://github.com/s00d/omnicat)
+[![Version](https://img.shields.io/badge/version-0.10.0-blue?style=for-the-badge)](https://github.com/s00d/omnicat)
 [![CI](https://img.shields.io/github/actions/workflow/status/s00d/omnicat/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/s00d/omnicat/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.92%2B-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
@@ -10,7 +10,7 @@
 
 # omnicat
 
-**Preview almost any file in your terminal — or in a GUI window.**  
+**Preview almost any file in your terminal.**  
 **Also: inspect artifacts (info, schema, find, hash, …) — no live servers, no subcommands.**
 
 omnicat is a smarter replacement for `cat` when you are working interactively. Point it at a file or folder and get a readable preview: Markdown with formatting, syntax-highlighted code, spreadsheet tables, PDF text, ebook chapters, archive trees, images, SQL dumps, logs, and more.
@@ -64,7 +64,6 @@ omnicat notes.epub --paginate # ebook text, page 1 + footer
 omnicat notes.epub --page 3   # ebook text, page 3 + footer
 cat project/                  # directory tree
 
-omnicat --preview diagram.png # GUI window (when a display is available)
 cat file.md | grep keyword    # pipe → plain cat (raw bytes)
 cat a.txt b.txt               # multiple files → plain cat
 cat -n file.md                # flags → plain cat
@@ -337,8 +336,6 @@ Remove the `eval "$(omnicat init …)"` line from your shell config and reload. 
 |---------------|---------|
 | Terminal preview | `cat <file>` or `omnicat <file>` (with shim) |
 | Folder tree | `cat <directory>/` |
-| GUI preview | `omnicat --preview <path>` |
-| GUI only (no terminal output) | `omnicat --preview-only <path>` |
 | Force plain `cat` | `cat -native <file> …` or `omnicat -native …` |
 | Page long output (page 1) | `omnicat --paginate <file>` |
 | Open a specific page | `omnicat --page N <file>` |
@@ -365,14 +362,6 @@ Footer example:
 
 Page size: `terminal.paginate.page_lines` in config (`0` = terminal height − 1, or 50 if unknown). Out-of-range `--page` exits with an error.
 
-## GUI preview
-
-Add `--preview` to open a native window (spreadsheets, images, slides, source with highlighting, and more).
-
-- Works when a display is available (local desktop).
-- On SSH or CI without a display: message on stderr, then terminal fallback.
-- Disable GUI attempts: `OMNICAT_NO_GUI=1`.
-
 ## Supported file types
 
 Built-in previews (no extra installs):
@@ -395,7 +384,7 @@ Built-in previews (no extra installs):
 | Notebooks | `.ipynb` (→ Markdown) |
 | Property lists | `.plist` |
 | Logs / text | `.log`, `.txt`, … (UTF‑8 preview; `--find` uses JSON lines / logfmt when present) |
-| Directories | any folder (rendered as a file tree) |
+| Directories | any folder (shallow tree, depth 1; `--all` for deep) |
 
 Standalone `.sql` dumps are handled as **database dumps**, not generic code highlight.
 
@@ -411,7 +400,7 @@ Optional YAML — pick the first file that exists:
 2. `~/.config/omnicat/config.yaml`
 3. Bundled defaults shipped with the binary
 
-Tune terminal themes, pager size, archive depth, GUI window size, `terminal.document.max_chars`, and external command chains. See `assets/config.default.yaml` for all options.
+Tune terminal themes, pager size, archive depth, `terminal.document.max_chars`, and external command chains. See `assets/config.default.yaml` for all options.
 
 ### Terminal color theme
 
@@ -429,9 +418,9 @@ omnicat -status    # show active settings (including the resolved code theme) an
 
 ## Platforms
 
-- **macOS** — fully supported (terminal + GUI)
-- **Linux** — fully supported (terminal + GUI when a display is present)
-- **Windows** — terminal preview; GUI depends on display support
+- **macOS** — fully supported
+- **Linux** — fully supported
+- **Windows** — terminal preview
 
 ## Development
 

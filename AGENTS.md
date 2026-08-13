@@ -17,7 +17,7 @@
 
 ### Running / demonstrating the CLI (non-obvious)
 - omnicat only renders a formatted preview when stdout is a TTY and exactly one file/dir argument is given. When output is piped or redirected it behaves like plain `cat` (raw bytes). To see rendered output non-interactively, allocate a pty, e.g. `script -qec "target/release/omnicat demo/files/sample.md" /dev/null`.
-- This VM is headless: GUI `--preview` mode is unavailable and falls back to the terminal. Set `OMNICAT_NO_GUI=1` to skip GUI attempts, and `CI=1`/`OMNICAT_NO_PLAYBACK` to avoid audio playback when previewing media.
+- Set `CI=1`/`OMNICAT_NO_PLAYBACK` to avoid audio playback when previewing media.
 - Sample files for manual testing live in `demo/files/` (md, rs, csv, xlsx, json, pdf, epub, images, archives, sqlite, …), `demo/dir-tree/`, `demo/log/`, and `demo/db/` (MySQL dump, Redis, SQLite, mongodump).
 - No subcommands: `omnicat` only previews/inspects files. SQL dumps (`.sql` / `.sql.gz`) render an overview with CREATE structure and INSERT sample rows (`--schema` for structure only, `--table NAME` for one table); `-q` streams a single-table SELECT with WHERE (AND/OR/=/</>/LIKE/IN/IS NULL), ORDER BY+LIMIT (top-k), OFFSET, and COUNT — no JOIN / no SQLite import. SQLite files still use full SQL via rusqlite.
 - `--find` shares the same predicate AST as dump WHERE (`src/search/`): shorthand (`level:error`, `status==ok`), SQL WHERE fragments (`level = 'error' AND id > 1`), or bare substring; full `SELECT` belongs in `-q`. JSONL/JSON/SQLite/SQL dumps evaluate field maps; plain text / `.log` extracts JSON-lines or logfmt `key=value` fields (else substring).

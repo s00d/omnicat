@@ -39,12 +39,8 @@ impl PreviewDriver for SpreadsheetDriver {
             .worksheet_range(&sheet_name)
             .context("failed to read sheet")?;
 
-        let max_rows = config
-            .gui
-            .spreadsheet
-            .max_rows
-            .min(config.terminal.data.max_rows);
-        let max_cols = config.gui.spreadsheet.max_cols;
+        let max_rows = config.terminal.data.max_rows;
+        let max_cols = config.terminal.data.max_cols;
 
         let mut headers = Vec::new();
         let mut rows = Vec::new();
@@ -54,7 +50,7 @@ impl PreviewDriver for SpreadsheetDriver {
                 break;
             }
             let cells: Vec<String> = row.iter().take(max_cols).map(cell_to_string).collect();
-            if i == 0 && config.gui.spreadsheet.header_row {
+            if i == 0 && config.terminal.data.header_row {
                 headers = cells;
             } else {
                 rows.push(cells);

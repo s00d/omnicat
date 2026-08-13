@@ -2,7 +2,6 @@ use std::process::Command;
 
 use assert_cmd::assert::OutputAssertExt;
 use assert_cmd::cargo::cargo_bin;
-use omnicat::preview::gui_available;
 
 fn omnicat() -> Command {
     Command::new(cargo_bin("omnicat"))
@@ -18,12 +17,12 @@ fn version_prints_omnicat() {
 }
 
 #[test]
-fn help_mentions_preview() {
+fn help_mentions_paginate() {
     omnicat()
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicates::str::contains("--preview"));
+        .stdout(predicates::str::contains("--paginate"));
 }
 
 #[test]
@@ -90,15 +89,7 @@ fn status_lists_handlers() {
         .success()
         .stdout(predicates::str::contains("markdown"))
         .stdout(predicates::str::contains("BUILTIN"))
-        .stdout(predicates::str::contains("EXTERNAL"))
-        .stdout(predicates::str::contains("GUI SETTINGS"));
-}
-
-#[test]
-fn preview_headless_returns_false() {
-    std::env::set_var("OMNICAT_NO_GUI", "1");
-    assert!(!gui_available());
-    std::env::remove_var("OMNICAT_NO_GUI");
+        .stdout(predicates::str::contains("EXTERNAL"));
 }
 
 #[test]
