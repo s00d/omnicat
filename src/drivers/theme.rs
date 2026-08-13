@@ -154,6 +154,9 @@ fn background_from_osc() -> Option<Background> {
         _ => {}
     }
 
+    // Do not enter raw mode: it freezes the user's TTY until timeout, which
+    // looks exactly like "hang then dump table". OSC 11 still works without it
+    // on most terminals; if not, COLORFGBG / dark default apply.
     let mut writer = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -164,12 +167,6 @@ fn background_from_osc() -> Option<Background> {
         .open("/dev/tty")
         .ok()?;
 
-    if crossterm::terminal::enable_raw_mode().is_err() {
-        return None;
-    }
-    let _guard = RawModeGuard;
-
-    // Query background color; terminate the query with ST (ESC \\).
     writer.write_all(b"\x1b]11;?\x1b\\").ok()?;
     writer.flush().ok()?;
 
@@ -203,16 +200,6 @@ fn background_from_osc() -> Option<Background> {
 #[cfg(not(unix))]
 fn background_from_osc() -> Option<Background> {
     None
-}
-
-#[cfg(unix)]
-struct RawModeGuard;
-
-#[cfg(unix)]
-impl Drop for RawModeGuard {
-    fn drop(&mut self) {
-        let _ = crossterm::terminal::disable_raw_mode();
-    }
 }
 
 #[cfg(test)]

@@ -195,10 +195,20 @@ pub struct PreviewContext {
 pub fn preview_context(path: &std::path::Path) -> PreviewContext {
     let meta = std::fs::metadata(path).ok();
     let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+    // Sniff mime from a small prefix only — never read multi-GB files here.
+    const SNIFF: usize = 8 * 1024;
     let mime = if meta.as_ref().is_some_and(|m| m.is_file()) {
-        std::fs::read(path)
-            .ok()
-            .and_then(|b| infer::get(&b).map(|t| t.mime_type().to_string()))
+        let mut buf = vec![0u8; SNIFF];
+        match std::fs::File::open(path).and_then(|mut f| {
+            use std::io::Read;
+            f.read(&mut buf)
+        }) {
+            Ok(n) => {
+                buf.truncate(n);
+                infer::get(&buf).map(|t| t.mime_type().to_string())
+            }
+            Err(_) => None,
+        }
     } else {
         None
     };

@@ -39,6 +39,29 @@ impl DataDriver {
 
         highlight_data(&formatted, &ext, config, out)
     }
+
+    /// Terminal preview with optional `--progress` (stream read + render ticks).
+    pub fn render_terminal(
+        path: &Path,
+        config: &OmnicatConfig,
+        ctx: &PreviewContext,
+        out: &mut dyn Write,
+    ) -> Result<()> {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match ext.as_str() {
+            "csv" => render_delimited_path_terminal(path, b',', config, ctx, out),
+            "tsv" => render_delimited_path_terminal(path, b'\t', config, ctx, out),
+            "jsonl" | "ndjson" => {
+                let content = build_jsonl_table(path, config, ctx)?;
+                crate::sinks::terminal::write_content(&content, config, out)
+            }
+            _ => DataDriver.render(path, config, out),
+        }
+    }
 }
 
 impl PreviewDriver for DataDriver {
@@ -152,7 +175,11 @@ fn parse_delimited_path(
         .max_rows
         .min(config.terminal.data.max_rows);
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    let mut progress = ProgressReporter::new("read", ctx.progress);
+    let mut progress = ProgressReporter::new("preview", ctx.progress);
+    if ctx.progress {
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+        progress.status(&format!("{name}  {}", human_bytes(ctx.size)));
+    }
     let (headers, rows) = read_delimited_limited(
         file,
         delimiter,
@@ -167,6 +194,77 @@ fn parse_delimited_path(
         headers,
         rows,
     })
+}
+
+fn render_delimited_path_terminal(
+    path: &Path,
+    delimiter: u8,
+    config: &OmnicatConfig,
+    ctx: &PreviewContext,
+    out: &mut dyn Write,
+) -> Result<()> {
+    let mut progress = ProgressReporter::new("preview", ctx.progress);
+    render_delimited_path_terminal_with(path, delimiter, config, ctx, &mut progress, out)
+}
+
+fn render_delimited_path_terminal_with(
+    path: &Path,
+    delimiter: u8,
+    config: &OmnicatConfig,
+    ctx: &PreviewContext,
+    progress: &mut ProgressReporter,
+    out: &mut dyn Write,
+) -> Result<()> {
+    let max_rows = config
+        .gui
+        .spreadsheet
+        .max_rows
+        .min(config.terminal.data.max_rows);
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+    progress.status(&format!("{name}  {}", human_bytes(ctx.size)));
+
+    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let (headers, rows) = read_delimited_limited(
+        file,
+        delimiter,
+        max_rows,
+        config.gui.spreadsheet.header_row,
+        Some(progress),
+        ctx.size,
+    )?;
+
+    progress.status(&format!("render  {} rows", rows.len()));
+    crate::sinks::styled_table::write_styled_table_with_progress(
+        out,
+        None,
+        &headers,
+        &rows,
+        config,
+        config.terminal.data.table_border,
+        Some(progress),
+    )?;
+    let cols = headers
+        .len()
+        .max(rows.first().map(|r| r.len()).unwrap_or(0));
+    writeln!(out, "\n{} rows × {cols} columns", rows.len())?;
+    out.flush()?;
+    progress.finish();
+    Ok(())
+}
+
+fn human_bytes(n: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut v = n as f64;
+    let mut i = 0usize;
+    while v >= 1024.0 && i + 1 < UNITS.len() {
+        v /= 1024.0;
+        i += 1;
+    }
+    if i == 0 {
+        format!("{n} {}", UNITS[i])
+    } else {
+        format!("{v:.1} {}", UNITS[i])
+    }
 }
 
 fn render_delimited_terminal(raw: &str, delimiter: u8, config: &OmnicatConfig) -> Result<String> {
@@ -218,8 +316,10 @@ fn read_delimited_limited<R: std::io::Read>(
                 .collect(),
         );
         if let Some(p) = progress.as_mut() {
-            let body_rows = if header_row { i } else { i + 1 };
-            p.tick_count(body_rows as u64, "rows");
+            let shown = if header_row { i } else { i + 1 };
+            if shown > 0 {
+                p.tick_count_total(shown as u64, max_rows.max(1) as u64, "rows");
+            }
         }
     }
     Ok(table_from_records(records, max_rows, header_row))
@@ -485,5 +585,78 @@ mod tests {
             }
             other => panic!("expected Table, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn csv_terminal_progress_emits_sticky_status_before_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big.csv");
+        let mut csv = String::from("id,name\n");
+        for i in 0..800 {
+            csv.push_str(&format!("{i},row-{i}\n"));
+        }
+        std::fs::write(&path, csv).unwrap();
+
+        let mut cfg = OmnicatConfig::default();
+        cfg.terminal.data.max_rows = 500;
+        cfg.gui.spreadsheet.max_rows = 500;
+        cfg.gui.spreadsheet.header_row = true;
+
+        let mut ctx = crate::content::preview_context(&path);
+        ctx.progress = true;
+        let (mut progress, captured) = ProgressReporter::capturing("preview");
+        let mut out = Vec::new();
+        render_delimited_path_terminal_with(&path, b',', &cfg, &ctx, &mut progress, &mut out)
+            .unwrap();
+
+        let prog = String::from_utf8(captured.lock().unwrap().clone()).unwrap();
+        let table = String::from_utf8(out).unwrap();
+
+        assert!(
+            prog.contains("preview  big.csv"),
+            "progress must name the file before table dump, got {prog:?}"
+        );
+        assert!(
+            prog.contains('\n'),
+            "status must be a real line, not only \\r: {prog:?}"
+        );
+        assert!(
+            progress.paint_count() >= 2,
+            "expected status + row ticks, paint_count={}",
+            progress.paint_count()
+        );
+        assert!(
+            table.contains("id") && table.contains("row-0"),
+            "stdout must contain the table, got {} bytes",
+            table.len()
+        );
+        let status_at = prog.find("preview  big.csv").unwrap();
+        let render_at = prog.find("render");
+        if let Some(r) = render_at {
+            assert!(status_at < r, "file status must precede render ticks");
+        }
+    }
+
+    #[test]
+    fn preview_context_sniffs_prefix_not_whole_file() {
+        use std::time::Instant;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("huge.csv");
+        // ~8 MiB of CSV — full read would be noticeable; sniff is 8 KiB.
+        let row = "x".repeat(80) + "\n";
+        let mut data = String::from("col\n");
+        while data.len() < 8 * 1024 * 1024 {
+            data.push_str(&row);
+        }
+        std::fs::write(&path, &data).unwrap();
+        let t0 = Instant::now();
+        let ctx = crate::content::preview_context(&path);
+        let elapsed = t0.elapsed();
+        assert_eq!(ctx.size, data.len() as u64);
+        assert!(
+            elapsed.as_millis() < 500,
+            "preview_context read too much: {:?}",
+            elapsed
+        );
     }
 }

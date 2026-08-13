@@ -580,4 +580,18 @@ mod tests {
             other => panic!("expected inspect, got {other:?}"),
         }
     }
+
+    #[test]
+    fn progress_flag_on_file_preview() {
+        match parse(&["demo/files/sample-large.csv", "--progress"]) {
+            Command::File { path, options } => {
+                assert_eq!(path, "demo/files/sample-large.csv");
+                assert!(
+                    options.progress,
+                    "--progress must reach FileOptions, not be dropped"
+                );
+            }
+            other => panic!("expected File preview with --progress, got {other:?}"),
+        }
+    }
 }

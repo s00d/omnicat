@@ -1,15 +1,28 @@
-//! Throttled stderr progress for long inspect scans (`--progress`).
+//! Throttled progress for long scans (`--progress`).
+//!
+//! Prefers `/dev/tty` so the line stays visible even when stderr is redirected
+//! (IDE runners, `2>file`). Falls back to stderr when it is a TTY.
 
+use std::fs::OpenOptions;
 use std::io::{self, IsTerminal, Write};
 use std::time::{Duration, Instant};
 
-const THROTTLE: Duration = Duration::from_millis(200);
+const THROTTLE: Duration = Duration::from_millis(100);
 const CHUNK_BYTES: u64 = 1024 * 1024;
-const CHUNK_UNITS: u64 = 10_000;
+const CHUNK_UNITS: u64 = 100;
 
-/// Opt-in progress line on stderr. No-op when disabled or stderr is not a TTY.
+enum ProgressOut {
+    Stderr,
+    #[cfg(unix)]
+    Tty(std::fs::File),
+    #[cfg(test)]
+    Capture(std::sync::Arc<std::sync::Mutex<Vec<u8>>>),
+}
+
+/// Opt-in progress line. No-op when disabled or no interactive tty is available.
 pub struct ProgressReporter {
     enabled: bool,
+    out: ProgressOut,
     label: String,
     started: Instant,
     last: Instant,
@@ -21,22 +34,44 @@ pub struct ProgressReporter {
 }
 
 impl ProgressReporter {
-    /// Create a reporter. When `enabled` is false, or stderr is not a TTY, ticks are no-ops.
+    /// Create a reporter. When `enabled` is false, ticks are no-ops.
     pub fn new(label: impl Into<String>, enabled: bool) -> Self {
-        let enabled = enabled && io::stderr().is_terminal();
-        Self::raw(label.into(), enabled)
+        if !enabled {
+            return Self::raw(label.into(), false, ProgressOut::Stderr);
+        }
+        #[cfg(unix)]
+        {
+            if let Ok(tty) = OpenOptions::new().write(true).open("/dev/tty") {
+                return Self::raw(label.into(), true, ProgressOut::Tty(tty));
+            }
+        }
+        let enabled = io::stderr().is_terminal();
+        Self::raw(label.into(), enabled, ProgressOut::Stderr)
     }
 
     /// Always-enabled reporter (for unit tests; ignores TTY).
     #[cfg(test)]
     pub fn for_test(label: impl Into<String>) -> Self {
-        Self::raw(label.into(), true)
+        Self::raw(label.into(), true, ProgressOut::Stderr)
     }
 
-    fn raw(label: String, enabled: bool) -> Self {
+    /// Capturing reporter for tests that assert progress text.
+    #[cfg(test)]
+    pub fn capturing(
+        label: impl Into<String>,
+    ) -> (Self, std::sync::Arc<std::sync::Mutex<Vec<u8>>>) {
+        let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        (
+            Self::raw(label.into(), true, ProgressOut::Capture(buf.clone())),
+            buf,
+        )
+    }
+
+    fn raw(label: String, enabled: bool, out: ProgressOut) -> Self {
         let now = Instant::now();
         Self {
             enabled,
+            out,
             label,
             started: now,
             last: now,
@@ -116,6 +151,19 @@ impl ProgressReporter {
         self.paint(done, &line);
     }
 
+    /// Immediate status. Writes a new line (not `\r`) so it stays visible
+    /// after the table starts printing — `\r` ticks are otherwise gone in <50ms.
+    pub fn status(&mut self, message: &str) {
+        if !self.enabled || self.finished {
+            return;
+        }
+        let line = format!("{}  {}\n", self.label, message);
+        self.last = Instant::now();
+        let _ = self.write_raw(&line);
+        self.painted = true;
+        self.paint_count += 1;
+    }
+
     /// Clear the progress line (once). Safe to call multiple times.
     pub fn finish(&mut self) {
         if !self.enabled || self.finished {
@@ -125,9 +173,9 @@ impl ProgressReporter {
         if !self.painted {
             return;
         }
-        let mut stderr = io::stderr().lock();
-        let _ = write!(stderr, "\r{:80}\r", "");
-        let _ = stderr.flush();
+        let _ = self.write_raw(
+            "\r                                                                                \r",
+        );
     }
 
     fn should_emit(&self, value: u64, chunk: u64) -> bool {
@@ -142,11 +190,30 @@ impl ProgressReporter {
     fn paint(&mut self, value: u64, line: &str) {
         self.last = Instant::now();
         self.last_value = value;
-        let mut stderr = io::stderr().lock();
-        let _ = write!(stderr, "\r{line:80}");
-        let _ = stderr.flush();
+        let padded = format!("\r{line:80}");
+        let _ = self.write_raw(&padded);
         self.painted = true;
         self.paint_count += 1;
+    }
+
+    fn write_raw(&mut self, s: &str) -> io::Result<()> {
+        match &mut self.out {
+            ProgressOut::Stderr => {
+                let mut stderr = io::stderr().lock();
+                stderr.write_all(s.as_bytes())?;
+                stderr.flush()
+            }
+            #[cfg(unix)]
+            ProgressOut::Tty(file) => {
+                file.write_all(s.as_bytes())?;
+                file.flush()
+            }
+            #[cfg(test)]
+            ProgressOut::Capture(buf) => {
+                buf.lock().unwrap().extend_from_slice(s.as_bytes());
+                Ok(())
+            }
+        }
     }
 
     fn rate_bytes(&self, done: u64) -> String {
@@ -180,11 +247,10 @@ fn human_bytes(n: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread;
 
     #[test]
     fn disabled_never_paints() {
-        let mut p = ProgressReporter::raw("x".into(), false);
+        let mut p = ProgressReporter::raw("x".into(), false, ProgressOut::Stderr);
         p.tick_bytes(10_000_000, Some(10_000_000));
         p.tick_count(100_000, "rows");
         assert_eq!(p.paint_count(), 0);
@@ -195,8 +261,7 @@ mod tests {
     #[test]
     fn throttle_skips_rapid_ticks() {
         let mut p = ProgressReporter::for_test("scan");
-        // First paint needs time or chunk — sleep for time gate
-        thread::sleep(THROTTLE + Duration::from_millis(20));
+        // First paint is immediate
         p.tick_bytes(100, Some(10_000_000));
         assert_eq!(p.paint_count(), 1);
         // tiny delta + no time → skip
@@ -210,10 +275,29 @@ mod tests {
     #[test]
     fn finish_is_idempotent() {
         let mut p = ProgressReporter::for_test("scan");
-        thread::sleep(THROTTLE + Duration::from_millis(20));
         p.tick_count(1, "files");
         p.finish();
         p.finish();
         assert!(p.finished);
+    }
+
+    #[test]
+    fn status_paints_immediately() {
+        let mut p = ProgressReporter::for_test("preview");
+        p.status("2.3 MiB");
+        assert_eq!(p.paint_count(), 1);
+    }
+
+    #[test]
+    fn status_is_sticky_newline_not_cr_only() {
+        let (mut p, buf) = ProgressReporter::capturing("preview");
+        p.status("sample.csv  2.2 MiB");
+        p.tick_count_total(100, 500, "rows");
+        let s = String::from_utf8(buf.lock().unwrap().clone()).unwrap();
+        assert!(
+            s.contains("preview  sample.csv  2.2 MiB\n"),
+            "status must stay on its own line, got {s:?}"
+        );
+        assert!(s.contains("100/500 rows"), "row ticks missing: {s:?}");
     }
 }

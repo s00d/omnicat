@@ -8,6 +8,7 @@ use crate::config::OmnicatConfig;
 use crate::content::{preview_context, PreviewContent, PreviewContext};
 use crate::detect::HandlerKind;
 use crate::drivers::code::CodeDriver;
+use crate::drivers::data::DataDriver;
 use crate::drivers::external;
 use crate::drivers::image::ImageDriver;
 use crate::drivers::markdown::MarkdownDriver;
@@ -111,6 +112,9 @@ impl PreviewOrchestrator {
                 }
                 if *kind == HandlerKind::Media {
                     return MediaDriver.render_terminal(path, config, out);
+                }
+                if *kind == HandlerKind::Data {
+                    return DataDriver::render_terminal(path, config, ctx, out);
                 }
                 let content = DriverRegistry::build_with_ctx(*kind, path, config, ctx)?;
                 terminal::write_content(&content, config, out)
