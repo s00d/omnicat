@@ -8,3 +8,7 @@ pre-build = [
 # Workflow sets PKG_CONFIG_PATH=/usr/lib/<deb-triplet>/pkgconfig per target.
 [build.env]
 passthrough = ["PKG_CONFIG_PATH", "PKG_CONFIG_ALLOW_CROSS"]
+
+# cross 0.2.5 riscv64 image is Ubuntu 18.04 (no riscv64 ports); main is 24.04.
+[target.riscv64gc-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/riscv64gc-unknown-linux-gnu:main"
