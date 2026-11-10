@@ -22,20 +22,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
-          - armv7-unknown-linux-gnueabihf
-          - arm-unknown-linux-gnueabihf
-          - i686-unknown-linux-gnu
-          - riscv64gc-unknown-linux-gnu
-          - powerpc64le-unknown-linux-gnu
-          - s390x-unknown-linux-gnu
+        include:
+          - { target: x86_64-unknown-linux-gnu, deb: x86_64-linux-gnu }
+          - { target: aarch64-unknown-linux-gnu, deb: aarch64-linux-gnu }
+          - { target: armv7-unknown-linux-gnueabihf, deb: arm-linux-gnueabihf }
+          - { target: arm-unknown-linux-gnueabihf, deb: arm-linux-gnueabihf }
+          - { target: i686-unknown-linux-gnu, deb: i386-linux-gnu }
+          - { target: riscv64gc-unknown-linux-gnu, deb: riscv64-linux-gnu }
+          - { target: powerpc64le-unknown-linux-gnu, deb: powerpc64le-linux-gnu }
+          - { target: s390x-unknown-linux-gnu, deb: s390x-linux-gnu }
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
+      # Build the tag's sources with this workflow revision's Cross.toml.
+      - run: git fetch --depth 1 origin ${{ github.sha }} && git checkout FETCH_HEAD -- Cross.toml
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -43,6 +45,9 @@ jobs:
         with:
           tool: cross
       - name: Build
+        env:
+          PKG_CONFIG_PATH: /usr/lib/${{ matrix.deb }}/pkgconfig
+          PKG_CONFIG_ALLOW_CROSS: "1"
         run: cross build --release --target ${{ matrix.target }}
       - name: Package
         run: |
